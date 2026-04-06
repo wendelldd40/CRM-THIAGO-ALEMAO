@@ -1166,6 +1166,13 @@ function showPage(p) {
   else if(p==='reports')    renderReports();
   else if(p==='estagiario') renderEstagiario();
   else if(p==='thiago')     renderThiago();
+  // Atualiza bottom nav mobile
+  document.querySelectorAll('.bn-item').forEach(el=>el.classList.remove('active'));
+  const bnMap = {dashboard:'bn-dashboard',kanban:'bn-kanban','leads-list':'bn-leads',estagiario:'bn-estagiario'};
+  const bnEl = document.getElementById(bnMap[p]||'');
+  if(bnEl) bnEl.classList.add('active');
+  // Fecha sidebar no mobile
+  closeSidebar();
 }
 
 function renderSidebar() {
@@ -2701,18 +2708,6 @@ function toggleSidebar(){
 function closeSidebar(){
   document.getElementById('sidebar').classList.remove('open');
   document.getElementById('sidebar-overlay').classList.remove('open');
-}
-
-// Override showPage to also update bottom nav active state
-const _origShowPage = showPage;
-function showPage(p){
-  _origShowPage(p);
-  // update bottom nav
-  document.querySelectorAll('.bn-item').forEach(el=>el.classList.remove('active'));
-  const bnMap = {dashboard:'bn-dashboard',kanban:'bn-kanban','leads-list':'bn-leads',estagiario:'bn-estagiario'};
-  const bnId = bnMap[p];
-  if(bnId){ const el=document.getElementById(bnId); if(el) el.classList.add('active'); }
-  closeSidebar();
 }
 
 /* ══════════════════════════════════════════
