@@ -138,6 +138,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);-webkit-font
 .stat-lbl{font-size:11px;color:var(--text2);margin-top:5px;font-weight:500}
 .stat-sub{font-size:10px;color:var(--text3);margin-top:2px;font-family:var(--mono)}
 .dash-grid{display:grid;grid-template-columns:1.5fr 1fr;gap:16px;margin-bottom:16px}
+.dash-grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden}
 .card-hd{padding:14px 18px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
 .card-title{font-size:13px;font-weight:700}
@@ -345,14 +346,176 @@ textarea{resize:vertical;line-height:1.6}
 .progress-bar{height:4px;border-radius:99px;background:var(--surface3);overflow:hidden;margin-top:8px}
 .progress-fill{height:100%;border-radius:99px;background:linear-gradient(90deg,var(--gold),var(--gold-l));transition:width .6s ease}
 
-/* responsive */
-@media(max-width:900px){:root{--side:0px}#sidebar{display:none}#main{margin-left:0}}
+/* ─────────── HAMBURGER BUTTON ─────────── */
+.tb-hamburger{
+  display:none;width:36px;height:36px;border-radius:var(--r-sm);
+  border:1px solid var(--border);background:var(--surface);
+  align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;
+  transition:.15s;
+}
+.tb-hamburger:hover{background:var(--surface2);border-color:var(--border-h)}
+.tb-hamburger svg{width:18px;height:18px;stroke:var(--text2);fill:none;stroke-width:2}
+
+/* ─────────── SIDEBAR OVERLAY ─────────── */
+#sidebar-overlay{
+  display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);
+  z-index:99;
+}
+#sidebar-overlay.open{display:block}
+
+/* ─────────── BOTTOM NAV ─────────── */
+#bottom-nav{display:none}
+
+/* ═══════════════════════════════════════
+   MOBILE — tudo abaixo de 768px
+═══════════════════════════════════════ */
+@media(max-width:768px){
+  :root{--side:0px;--top:52px}
+
+  /* ── TOPBAR ── */
+  .tb-hamburger{display:flex}
+  .tb-chip:not(.gold){display:none}
+  .tb-sep{display:none}
+  .tb-search{max-width:none;flex:1;min-width:0}
+  .tb-chip.gold{padding:6px 10px;font-size:11px;gap:4px}
+  .tb-chip.gold span{display:none}
+  .tb-right{gap:6px}
+  .tb-avatar{width:28px;height:28px;font-size:10px}
+
+  /* ── SIDEBAR como drawer ── */
+  #sidebar{
+    display:flex !important;
+    transform:translateX(-100%);
+    transition:transform .28s cubic-bezier(.23,1,.32,1);
+    z-index:300;
+    width:280px;
+    box-shadow:8px 0 40px rgba(0,0,0,.6);
+  }
+  #sidebar.open{transform:translateX(0)}
+
+  /* ── MAIN ── */
+  #main{margin-left:0;padding-bottom:68px}
+
+  /* ── BOTTOM NAV ── */
+  #bottom-nav{
+    display:flex;position:fixed;bottom:0;left:0;right:0;
+    height:62px;background:rgba(7,7,11,.97);
+    border-top:1px solid var(--border);
+    z-index:200;backdrop-filter:blur(16px);
+    align-items:stretch;
+  }
+  .bn-items{display:flex;width:100%;align-items:stretch}
+  .bn-item{
+    flex:1;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:3px;cursor:pointer;
+    border:none;background:none;color:var(--text3);
+    font-size:9px;font-weight:700;font-family:var(--font);
+    letter-spacing:.3px;text-transform:uppercase;
+    transition:.15s;padding:0;-webkit-tap-highlight-color:transparent;
+  }
+  .bn-item:active{background:rgba(255,255,255,.05)}
+  .bn-item.active{color:var(--gold)}
+  .bn-item svg{width:20px;height:20px;stroke:currentColor;fill:none;flex-shrink:0;stroke-width:1.8}
+  .bn-item.active svg{stroke:var(--gold)}
+  .bn-fab{
+    width:52px;height:52px;border-radius:50%;
+    background:linear-gradient(135deg,var(--gold),var(--gold-l));
+    display:flex;align-items:center;justify-content:center;
+    border:none;cursor:pointer;
+    box-shadow:0 0 0 4px var(--bg),0 4px 20px rgba(212,175,55,.4);
+    margin-top:-18px;flex-shrink:0;
+    transition:.15s;-webkit-tap-highlight-color:transparent;
+  }
+  .bn-fab:active{transform:scale(.9)}
+  .bn-fab svg{width:22px;height:22px;stroke:var(--bg);fill:none;stroke-width:2.5}
+
+  /* ── PAGE HEADER ── */
+  .ph{padding:12px 14px 10px;flex-wrap:wrap;gap:8px}
+  .ph-left h2{font-size:16px;letter-spacing:-.3px}
+  .ph-left p{font-size:11px}
+  .ph-right{flex-wrap:wrap;gap:5px}
+  .ph-right .btn,.ph-right select{font-size:11px;padding:5px 9px}
+
+  /* ── SCROLL AREA ── */
+  .pg-scroll{padding:14px 12px}
+
+  /* ── STATS GRID: 2x2 ── */
+  .stats-grid{grid-template-columns:1fr 1fr !important;gap:8px;margin-bottom:14px}
+  .stat-card{padding:12px 12px}
+  .stat-val{font-size:22px}
+  .stat-lbl{font-size:10px}
+  .stat-sub{font-size:9px}
+  .stat-icon{width:28px;height:28px;margin-bottom:8px}
+  .stat-icon svg{width:13px;height:13px}
+
+  /* ── DASH GRIDS: tudo 1 coluna ── */
+  .dash-grid{grid-template-columns:1fr !important}
+  .dash-grid-3{grid-template-columns:1fr !important}
+
+  /* ── CARDS ── */
+  .card-body{padding:12px 14px}
+  .card-hd{padding:12px 14px 10px;flex-wrap:wrap;gap:6px}
+
+  /* ── KANBAN ── */
+  .kb-toolbar{padding:8px 12px;gap:6px;flex-wrap:wrap}
+  .kb-board-wrap{padding:10px 8px}
+  .kb-col{width:240px;padding:10px}
+  .kb-funnel-tabs{flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px}
+
+  /* ── LEADS TABLE ── */
+  .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  table{min-width:480px;font-size:12px}
+  th{padding:8px 10px;font-size:9px}
+  td{padding:8px 10px}
+  .table-toolbar{padding:8px 10px;gap:6px}
+
+  /* ── DETAIL PANEL ── */
+  .detail-panel{
+    width:100% !important;
+    border-left:none;
+    border-top:1px solid var(--border);
+    top:var(--top);
+  }
+
+  /* ── MODALS ── */
+  .mo{align-items:flex-end}
+  .modal,.modal-lg{
+    max-width:100% !important;
+    width:100% !important;
+    border-radius:var(--r) var(--r) 0 0;
+    margin:0;
+    max-height:90vh;
+  }
+  .modal-body{max-height:60vh}
+  .field-row{grid-template-columns:1fr !important}
+
+  /* ── FUNNELS PAGE ── */
+  #funnels-content > div{grid-template-columns:1fr !important}
+
+  /* ── ESTAGIÁRIO: grids inline viram 1 col ── */
+  #estagiario-content [style*="grid-template-columns:1.2fr"],
+  #estagiario-content [style*="grid-template-columns:1fr 1fr"],
+  #thiago-content [style*="grid-template-columns:1.6fr"],
+  #thiago-content [style*="grid-template-columns:1fr 1fr"]{
+    grid-template-columns:1fr !important;
+  }
+
+  /* ── MINI STATS ── */
+  #estagiario-content .stats-grid,
+  #thiago-content .stats-grid{
+    grid-template-columns:1fr 1fr !important;
+  }
+}
 </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>\n  <style>@keyframes spin{to{transform:rotate(360deg)}}</style>\n</head>
 <body>
 
 <!-- ══════════════ TOPBAR ══════════════ -->
 <div id="topbar">
+  <!-- Hamburger (mobile only) -->
+  <button class="tb-hamburger" onclick="toggleSidebar()" aria-label="Menu">
+    <svg viewBox="0 0 24 24" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+  </button>
   <div class="tb-brand">
     <div class="tb-mark">N</div>
     <div class="tb-name">Nexus<span>CRM</span></div>
@@ -360,7 +523,7 @@ textarea{resize:vertical;line-height:1.6}
   <div class="tb-sep"></div>
   <div class="tb-search">
     <svg viewBox="0 0 24 24" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-    <input type="text" id="global-search" placeholder="Buscar lead, e-mail, empresa…" oninput="onGlobalSearch(this.value)">
+    <input type="text" id="global-search" placeholder="Buscar lead…" oninput="onGlobalSearch(this.value)">
   </div>
   <div class="tb-right">
     <button class="tb-chip" onclick="showPage('dashboard')">
@@ -373,11 +536,14 @@ textarea{resize:vertical;line-height:1.6}
     </button>
     <button class="tb-chip gold" onclick="openLeadModal()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="13" height="13"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-      Novo Lead
+      <span>Novo Lead</span>
     </button>
     <div class="tb-avatar" title="Gerente CRM">G</div>
   </div>
 </div>
+
+<!-- Overlay para fechar sidebar no mobile -->
+<div id="sidebar-overlay" onclick="toggleSidebar()"></div>
 
 <!-- ══════════════ SIDEBAR ══════════════ -->
 <div id="sidebar">
@@ -739,6 +905,31 @@ textarea{resize:vertical;line-height:1.6}
   <span id="toast-msg"></span>
 </div>
 
+<!-- ══════════════ BOTTOM NAV (mobile) ══════════════ -->
+<nav id="bottom-nav">
+  <div class="bn-items">
+    <button class="bn-item active" id="bn-dashboard" onclick="showPage('dashboard');closeSidebar()">
+      <svg viewBox="0 0 24 24" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      Dash
+    </button>
+    <button class="bn-item" id="bn-kanban" onclick="showPage('kanban');closeSidebar()">
+      <svg viewBox="0 0 24 24" stroke-width="2"><rect x="3" y="3" width="4" height="18"/><rect x="10" y="3" width="4" height="13"/><rect x="17" y="3" width="4" height="10"/></svg>
+      Kanban
+    </button>
+    <button class="bn-fab" onclick="openLeadModal()" aria-label="Novo Lead">
+      <svg viewBox="0 0 24 24" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    </button>
+    <button class="bn-item" id="bn-leads" onclick="showPage('leads-list');closeSidebar()">
+      <svg viewBox="0 0 24 24" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+      Leads
+    </button>
+    <button class="bn-item" id="bn-estagiario" onclick="showPage('estagiario');closeSidebar()">
+      <svg viewBox="0 0 24 24" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      Área
+    </button>
+  </div>
+</nav>
+
 <!-- Task Modal -->
 <div class="mo" id="mo-task">
   <div class="modal">
@@ -1081,7 +1272,7 @@ function renderDashboard() {
     }
 
     <!-- ── INSTAGRAM BREAKDOWN + VET% ── -->
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:20px">
+    <div class="dash-grid-3">
 
       <!-- Instagram DM -->
       <div class="card">
@@ -2496,6 +2687,33 @@ function setTableFilter(f){ tableFilter=f; renderLeadsTable(); }
 document.querySelectorAll('.mo').forEach(mo=>{
   mo.addEventListener('click',e=>{ if(e.target===mo) mo.classList.remove('open'); });
 });
+
+/* ══════════════════════════════════════════
+   MOBILE SIDEBAR & BOTTOM NAV
+══════════════════════════════════════════ */
+function toggleSidebar(){
+  const sb = document.getElementById('sidebar');
+  const ov = document.getElementById('sidebar-overlay');
+  const isOpen = sb.classList.contains('open');
+  sb.classList.toggle('open', !isOpen);
+  ov.classList.toggle('open', !isOpen);
+}
+function closeSidebar(){
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.remove('open');
+}
+
+// Override showPage to also update bottom nav active state
+const _origShowPage = showPage;
+function showPage(p){
+  _origShowPage(p);
+  // update bottom nav
+  document.querySelectorAll('.bn-item').forEach(el=>el.classList.remove('active'));
+  const bnMap = {dashboard:'bn-dashboard',kanban:'bn-kanban','leads-list':'bn-leads',estagiario:'bn-estagiario'};
+  const bnId = bnMap[p];
+  if(bnId){ const el=document.getElementById(bnId); if(el) el.classList.add('active'); }
+  closeSidebar();
+}
 
 /* ══════════════════════════════════════════
    INIT
