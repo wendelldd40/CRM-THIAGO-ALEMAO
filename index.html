@@ -2583,6 +2583,251 @@ async function setTaskStatus(id, status){
   if(error) return showError(error.message);
   renderSidebar(); renderEstagiario();
 }
+/* ══════════════════════════════════════════
+   ESTAGIÁRIO PAGE
+══════════════════════════════════════════ */
+const PRIORITY_MAP = {
+  urgente:{l:'Urgente', c:'#ef4444', bg:'rgba(239,68,68,.12)',  dot:'🔴'},
+  alta:   {l:'Alta',    c:'#f97316', bg:'rgba(249,115,22,.12)', dot:'🟠'},
+  media:  {l:'Média',   c:'#d4af37', bg:'rgba(212,175,55,.12)', dot:'🟡'},
+  baixa:  {l:'Baixa',   c:'#22c55e', bg:'rgba(34,197,94,.12)',  dot:'🟢'},
+};
+const STATUS_MAP = {
+  pendente:    {l:'Pendente',     c:'#8a8680', icon:'⏳'},
+  em_andamento:{l:'Em andamento', c:'#3b82f6', icon:'🔄'},
+  concluida:   {l:'Concluída',    c:'#22c55e', icon:'✅'},
+};
+
+function renderEstagiario(){
+  const el = document.getElementById('estagiario-content');
+  if(!el) return;
+  const todayStr = today();
+  const convertedLeads  = leads.filter(l=>l.converted);
+  const meetingLeads    = leads.filter(l=>l.followUp && l.followUp>=todayStr && !l.converted);
+  const overdueTasks    = tasks.filter(t=>t.deadline && t.deadline<todayStr && t.status!=='concluida');
+  const tasksByStatus   = s => tasks.filter(t=>t.status===s);
+
+  el.innerHTML = `
+    <div class="stats-grid" style="margin-bottom:16px">
+      ${miniKpi('Tarefas Totais',    tasks.length,                   '#3b82f6','rgba(59,130,246,.1)')}
+      ${miniKpi('Pendentes',         tasksByStatus('pendente').length,'#d4af37','rgba(212,175,55,.1)')}
+      ${miniKpi('Em Andamento',      tasksByStatus('em_andamento').length,'#a855f7','rgba(168,85,247,.1)')}
+      ${miniKpi('Concluídas',        tasksByStatus('concluida').length,'#22c55e','rgba(34,197,94,.1)')}
+    </div>
+
+    <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:16px;margin-bottom:20px">
+
+      <!-- TAREFAS -->
+      <div class="card">
+        <div class="card-hd">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span class="card-title">📋 Tarefas do Thiago</span>
+            ${overdueTasks.length?`<span style="background:rgba(239,68,68,.1);color:var(--red);font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px">${overdueTasks.length} atrasada${overdueTasks.length>1?'s':''}</span>`:''}
+          </div>
+          <button class="btn btn-sm btn-gold" onclick="openTaskModal()">+ Tarefa</button>
+        </div>
+        <div style="max-height:420px;overflow-y:auto">
+          ${tasks.length===0?`<div class="empty"><div class="empty-icon">✅</div><p>Nenhuma tarefa ainda</p></div>`:''}
+          ${['urgente','alta','media','baixa'].flatMap(pri=>
+            tasks.filter(t=>t.priority===pri).map(t=>{
+              const p  = PRIORITY_MAP[t.priority];
+              const st = STATUS_MAP[t.status]||STATUS_MAP.pendente;
+              const isOverdue = t.deadline && t.deadline<todayStr && t.status!=='concluida';
+              return `<div style="padding:12px 16px;border-bottom:1px solid var(--border)">
+                <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+                  <div style="flex:1;min-width:0">
+                    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
+                      <span style="font-size:13px;font-weight:700;${t.status==='concluida'?'text-decoration:line-through;color:var(--text3)':''}">${t.title}</span>
+                      <span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:99px;background:${p.bg};color:${p.c}">${p.dot} ${p.l}</span>
+                    </div>
+                    ${t.desc?`<div style="font-size:11.5px;color:var(--text3);margin-bottom:4px;line-height:1.5">${t.desc}</div>`:''}
+                    ${t.deadline?`<div style="font-size:10px;font-family:var(--mono);color:${isOverdue?'var(--red)':'var(--text3)'}">${isOverdue?'🚨 Atrasado — ':'📅 '}${fmtDate(t.deadline)}</div>`:''}
+                  </div>
+                  <div style="display:flex;gap:4px;flex-shrink:0">
+                    <button class="btn btn-sm btn-ghost" onclick="editTask('${t.id}')">✏️</button>
+                    <button class="btn btn-sm btn-ghost" style="color:var(--red)" onclick="deleteTask('${t.id}')">🗑️</button>
+                  </div>
+                </div>
+                <div style="display:flex;gap:4px;margin-top:8px;flex-wrap:wrap">
+                  ${['pendente','em_andamento','concluida'].map(s=>`
+                    <button onclick="setTaskStatus('${t.id}','${s}')" style="font-size:10px;padding:3px 9px;border-radius:5px;border:1px solid ${t.status===s?STATUS_MAP[s].c:'var(--border)'};background:${t.status===s?STATUS_MAP[s].c+'18':'none'};color:${t.status===s?STATUS_MAP[s].c:'var(--text3)'};cursor:pointer;font-family:var(--font);font-weight:600;transition:.15s">
+                      ${STATUS_MAP[s].icon} ${STATUS_MAP[s].l}
+                    </button>`).join('')}
+                </div>
+              </div>`;
+            })
+          ).join('')}
+        </div>
+      </div>
+
+      <!-- RESULTADOS -->
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div class="card">
+          <div class="card-hd"><span class="card-title">✅ Leads Convertidos</span><span class="card-sub">${convertedLeads.length} fechado${convertedLeads.length!==1?'s':''}</span></div>
+          <div style="max-height:200px;overflow-y:auto">
+            ${convertedLeads.length===0?`<div style="padding:20px;text-align:center;font-size:12px;color:var(--text3)">Nenhum convertido ainda</div>`:
+              convertedLeads.map(l=>`
+              <div onclick="openDetail('${l.id}')" style="padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;display:flex;align-items:center;gap:10px">
+                <div style="width:30px;height:30px;border-radius:50%;background:${strColor(l.name)};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0">${initials(l.name)}</div>
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:12.5px;font-weight:700">${l.name}</div>
+                  <div style="font-size:10px;color:var(--text3)">${l.instagram||l.company||l.phone||'—'} · ${l.serviceMonths||0} mês${(l.serviceMonths||0)!==1?'es':''}</div>
+                </div>
+                <span style="font-size:11px;font-weight:700;color:var(--gold);font-family:var(--mono);flex-shrink:0">${fmtMoney(l.value)}</span>
+              </div>`).join('')}
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-hd"><span class="card-title">📅 Reuniões Agendadas</span><span class="card-sub">${meetingLeads.length} pendente${meetingLeads.length!==1?'s':''}</span></div>
+          <div style="max-height:180px;overflow-y:auto">
+            ${meetingLeads.length===0?`<div style="padding:20px;text-align:center;font-size:12px;color:var(--text3)">Nenhuma reunião agendada</div>`:
+              meetingLeads.map(l=>`
+              <div onclick="openDetail('${l.id}')" style="padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;display:flex;align-items:center;gap:10px">
+                <div style="width:28px;height:28px;border-radius:50%;background:${strColor(l.name)};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;flex-shrink:0">${initials(l.name)}</div>
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:12px;font-weight:700">${l.name}</div>
+                  <div style="font-size:10px;color:var(--text3)">${l.instagram||l.phone||'—'}</div>
+                </div>
+                <span style="font-size:10px;font-family:var(--mono);color:${l.followUp===todayStr?'var(--gold)':'var(--text3)'};flex-shrink:0">${l.followUp===todayStr?'⏰ Hoje':fmtDate(l.followUp)}</span>
+              </div>`).join('')}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- OBSERVAÇÕES -->
+    <div class="card">
+      <div class="card-hd"><span class="card-title">📝 Observações / Recados</span><span class="card-sub">visível para o Thiago</span></div>
+      <div style="padding:16px 18px">
+        <textarea id="est-obs" rows="5" placeholder="Escreva observações, dúvidas ou recados para o Thiago…"
+          style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px;font-family:var(--font);font-size:13px;color:var(--text);outline:none;resize:vertical;line-height:1.7;transition:.15s"
+          onfocus="this.style.borderColor='var(--gold)'" onblur="this.style.borderColor='var(--border)'"
+        >${estagiarioObs}</textarea>
+        <div style="display:flex;justify-content:flex-end;margin-top:8px">
+          <button class="btn btn-gold" onclick="saveObs()">💾 Salvar Observações</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function miniKpi(lbl, val, color, bg){
+  return `<div class="stat-card">
+    <div class="stat-stripe" style="background:${color}"></div>
+    <div style="font-size:26px;font-weight:900;letter-spacing:-.05em;color:${color}">${val}</div>
+    <div style="font-size:11px;color:var(--text2);margin-top:4px;font-weight:500">${lbl}</div>
+  </div>`;
+}
+
+/* ══════════════════════════════════════════
+   THIAGO PESSOAL PAGE
+══════════════════════════════════════════ */
+function renderThiago(){
+  const el = document.getElementById('thiago-content');
+  if(!el) return;
+  const active   = mentorships.filter(m=>m.active);
+  const inactive = mentorships.filter(m=>!m.active);
+  const weeklyHours   = active.reduce((s,m)=>(parseFloat(m.hoursPerSession)||0)*(parseInt(m.sessionsPerWeek)||0)+s,0);
+  const contractHours = active.reduce((s,m)=>(parseFloat(m.hoursPerSession)||0)*(parseInt(m.sessionsPerWeek)||0)*(parseInt(m.totalWeeks)||0)+s,0);
+  const monthlyHours  = weeklyHours*4;
+  const loadStatus    = weeklyHours<=10?{l:'Saudável ✅',c:'#22c55e'}:weeklyHours<=20?{l:'Moderada ⚠️',c:'#d4af37'}:{l:'Alta 🔴',c:'var(--red)'};
+  const mentorshipRevenue = active.reduce((s,m)=>s+(parseFloat(m.value)||0),0);
+  const convertedLeads = leads.filter(l=>l.converted);
+  const igLeads = leads.filter(l=>l.origin==='ig_comentario'||l.origin==='ig_seguidor');
+  const vetPct  = leads.length?Math.round(leads.filter(l=>l.isVet).length/leads.length*100):0;
+
+  el.innerHTML = `
+    <div class="stats-grid" style="margin-bottom:16px">
+      ${miniKpi('Mentorias Ativas',  active.length,           '#d4af37','rgba(212,175,55,.1)')}
+      ${miniKpi('Horas/Semana',      weeklyHours.toFixed(1)+'h', weeklyHours>20?'#ef4444':weeklyHours>10?'#d4af37':'#22c55e', weeklyHours>20?'rgba(239,68,68,.1)':weeklyHours>10?'rgba(212,175,55,.1)':'rgba(34,197,94,.1)')}
+      ${miniKpi('Horas/Mês (est.)',  monthlyHours.toFixed(1)+'h','#a855f7','rgba(168,85,247,.1)')}
+      ${miniKpi('Receita Mentorias', fmtMoney(mentorshipRevenue),'#22c55e','rgba(34,197,94,.1)')}
+    </div>
+
+    <!-- ALERTA CARGA -->
+    <div style="margin-bottom:16px;padding:14px 18px;border-radius:var(--r);background:${weeklyHours>20?'rgba(239,68,68,.07)':weeklyHours>10?'rgba(212,175,55,.07)':'rgba(34,197,94,.07)'};border:1px solid ${weeklyHours>20?'rgba(239,68,68,.2)':weeklyHours>10?'rgba(212,175,55,.2)':'rgba(34,197,94,.2)'};display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
+      <div>
+        <div style="font-size:13px;font-weight:700;color:${loadStatus.c}">Carga Horária: ${loadStatus.l}</div>
+        <div style="font-size:11.5px;color:var(--text3);margin-top:3px">${weeklyHours.toFixed(1)}h semanais · ${monthlyHours.toFixed(1)}h mensais · ${contractHours.toFixed(0)}h total em contratos</div>
+      </div>
+      <div style="font-size:28px;font-weight:900;color:${loadStatus.c}">${weeklyHours.toFixed(1)}<span style="font-size:14px">h/sem</span></div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1.6fr 1fr;gap:16px;margin-bottom:16px">
+
+      <!-- MENTORIAS ATIVAS -->
+      <div class="card">
+        <div class="card-hd">
+          <span class="card-title">🎓 Mentorias Ativas (${active.length})</span>
+          <button class="btn btn-sm btn-gold" onclick="openMentorshipModal()">+ Nova</button>
+        </div>
+        <div>
+          ${active.length===0?`<div class="empty"><div class="empty-icon">🎓</div><p>Nenhuma mentoria ativa</p><small>Clique em "+ Nova" para cadastrar</small></div>`:''}
+          ${active.map(m=>mentorshipRow(m)).join('')}
+        </div>
+      </div>
+
+      <!-- VISÃO CRM + RECADOS -->
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div class="card">
+          <div class="card-hd"><span class="card-title">📊 Visão Comercial</span></div>
+          <div style="padding:12px 16px;display:flex;flex-direction:column;gap:8px">
+            ${[
+              ['Total de Leads',  leads.length,         'var(--text)',  'var(--surface2)'],
+              ['Convertidos',     convertedLeads.length, '#22c55e',     'rgba(34,197,94,.07)'],
+              ['Via Instagram DM',igLeads.length,        '#e1306c',     'rgba(225,48,108,.07)'],
+              ['% Veterinários',  vetPct+'%',            vetPct>=60?'#3b82f6':'var(--red)', vetPct>=60?'rgba(59,130,246,.07)':'rgba(239,68,68,.07)'],
+            ].map(([lbl,val,color,bg])=>`
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:${bg};border-radius:var(--r-sm)">
+                <span style="font-size:12px;color:var(--text2)">${lbl}</span>
+                <span style="font-size:18px;font-weight:800;color:${color}">${val}</span>
+              </div>`).join('')}
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-hd"><span class="card-title">📝 Recados do Estagiário</span></div>
+          <div style="padding:12px 16px">
+            <div style="font-size:12.5px;color:var(--text2);line-height:1.7;min-height:60px;white-space:pre-wrap">${estagiarioObs||'<span style="color:var(--text3);font-style:italic">Nenhuma observação ainda.</span>'}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    ${inactive.length>0?`
+    <div class="card">
+      <div class="card-hd"><span class="card-title">⏸️ Mentorias Encerradas (${inactive.length})</span></div>
+      <div>${inactive.map(m=>mentorshipRow(m)).join('')}</div>
+    </div>`:''}
+  `;
+}
+
+function mentorshipRow(m){
+  const weekHours  = (parseFloat(m.hoursPerSession)||0)*(parseInt(m.sessionsPerWeek)||0);
+  const totalHours = weekHours*(parseInt(m.totalWeeks)||0);
+  const typeIcon   = m.type.includes('Grupo')?'👥':m.type.includes('Consul')?'💼':m.type.includes('Inten')?'⚡':'👤';
+  return `<div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;gap:12px">
+    <div style="width:38px;height:38px;border-radius:10px;background:${m.active?'rgba(212,175,55,.12)':'rgba(128,128,128,.1)'};display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">${typeIcon}</div>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:13px;font-weight:700;margin-bottom:3px">${m.client}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:5px">
+        <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;background:${m.active?'rgba(212,175,55,.1)':'var(--surface3)'};color:${m.active?'var(--gold)':'var(--text3)'}">${m.type}</span>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;font-size:11px;color:var(--text3)">
+        <span>⏱ ${m.hoursPerSession}h/sessão · ${m.sessionsPerWeek}x/sem · ${m.totalWeeks} sem</span>
+        <span>🕒 ${weekHours.toFixed(1)}h/sem · ${totalHours.toFixed(0)}h total</span>
+        ${m.startDate?`<span>📅 ${fmtDate(m.startDate)}</span>`:''}
+        ${m.value?`<span style="color:var(--gold);font-weight:700">${fmtMoney(m.value)}/mês</span>`:''}
+      </div>
+      ${m.notes?`<div style="font-size:11px;color:var(--text3);margin-top:4px;font-style:italic">${m.notes}</div>`:''}
+    </div>
+    <div style="display:flex;gap:4px;flex-shrink:0">
+      <button class="btn btn-sm btn-ghost" onclick="editMentorship('${m.id}')">✏️</button>
+      <button class="btn btn-sm btn-ghost" style="color:var(--red)" onclick="deleteMentorship('${m.id}')">🗑️</button>
+    </div>
+  </div>`;
+}
+
 async function saveObs(){
   estagiarioObs = document.getElementById('est-obs').value;
   const {error} = await sb.from('settings').upsert({key:'estagiario_obs', value:estagiarioObs});
