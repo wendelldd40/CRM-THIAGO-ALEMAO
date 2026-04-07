@@ -992,8 +992,47 @@ textarea{resize:vertical;line-height:1.6}
       </div>
       <div class="field-row">
         <div class="field"><label>Total de Semanas</label><input type="number" id="mm2-weeks" placeholder="8" min="1"></div>
-        <div class="field"><label>Data de Início</label><input type="date" id="mm2-start"></div>
+        <div class="field"><label>Valor Mensal (R$)</label><input type="number" id="mm2-value" placeholder="0" min="0"></div>
       </div>
+      <div class="field-row">
+        <div class="field"><label>Data de Início</label><input type="date" id="mm2-start" onchange="updateMentorshipEndDate()"></div>
+        <div class="field"><label>Data de Término (calculada)</label><input type="date" id="mm2-end" placeholder="Calculada automaticamente"></div>
+      </div>
+
+      <!-- AGENDA RECORRENTE -->
+      <div style="height:1px;background:var(--border);margin:14px 0"></div>
+      <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text3);margin-bottom:10px">📅 Agenda de Sessões</div>
+      <div class="field">
+        <label>Tipo de Recorrência</label>
+        <select id="mm2-schedule-type" onchange="toggleScheduleOptions()">
+          <option value="nenhuma">Sem agendamento fixo</option>
+          <option value="semanal">Semanalmente (ex: toda terça)</option>
+          <option value="quinzenal">A cada 15 dias</option>
+          <option value="mensal_dia">Todo dia X do mês</option>
+          <option value="intervalo">A cada N dias</option>
+        </select>
+      </div>
+      <div id="mm2-schedule-semanal" style="display:none">
+        <div class="field"><label>Dia(s) da Semana</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px" id="mm2-weekdays">
+            ${['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map((d,i)=>`
+              <button type="button" onclick="toggleWeekday(${i})" id="wd-${i}" style="padding:5px 10px;border-radius:6px;border:1px solid var(--border);background:none;color:var(--text3);font-size:12px;font-family:var(--font);cursor:pointer;transition:.15s">${d}</button>
+            `).join('')}
+          </div>
+        </div>
+      </div>
+      <div id="mm2-schedule-mensal" style="display:none">
+        <div class="field"><label>Dia do Mês (1–28)</label><input type="number" id="mm2-day-of-month" placeholder="Ex: 15" min="1" max="28"></div>
+      </div>
+      <div id="mm2-schedule-intervalo" style="display:none">
+        <div class="field"><label>Intervalo em dias</label><input type="number" id="mm2-interval-days" placeholder="Ex: 15" min="1"></div>
+      </div>
+      <div id="mm2-schedule-preview" style="display:none;margin-top:8px">
+        <button type="button" class="btn btn-sm" onclick="previewSessions()" style="width:100%">👁 Pré-visualizar sessões geradas</button>
+        <div id="mm2-preview-list" style="margin-top:8px;max-height:120px;overflow-y:auto;font-size:11px;color:var(--text3);line-height:1.8"></div>
+      </div>
+
+      <div style="height:1px;background:var(--border);margin:14px 0"></div>
       <div class="field-row">
         <div class="field"><label>Status</label>
           <select id="mm2-active">
@@ -1001,9 +1040,8 @@ textarea{resize:vertical;line-height:1.6}
             <option value="false">⏸️ Encerrada</option>
           </select>
         </div>
-        <div class="field"><label>Valor Mensal (R$)</label><input type="number" id="mm2-value" placeholder="0" min="0"></div>
+        <div class="field"><label>Observações</label><textarea id="mm2-notes" rows="2" placeholder="Informações adicionais…"></textarea></div>
       </div>
-      <div class="field"><label>Observações</label><textarea id="mm2-notes" rows="2" placeholder="Informações adicionais…"></textarea></div>
     </div>
     <div class="modal-ft">
       <button class="btn" onclick="closeMo('mo-mentorship')">Cancelar</button>
@@ -1121,7 +1159,7 @@ function mapLead(r){ return {
   activities:r.activities||[], date:r.date||today()
 }; }
 function mapTask(r){ return { id:r.id, title:r.title, desc:r.description||'', priority:r.priority||'media', status:r.status||'pendente', deadline:r.deadline||'', createdAt:r.created_at }; }
-function mapMentorship(r){ return { id:r.id, client:r.client, type:r.type||'Mentoria Individual', hoursPerSession:r.hours_per_session||1, sessionsPerWeek:r.sessions_per_week||1, totalWeeks:r.total_weeks||4, startDate:r.start_date||'', active:r.active!==false, value:r.value||0, notes:r.notes||'' }; }
+function mapMentorship(r){ return { id:r.id, client:r.client, type:r.type||'Mentoria Individual', hoursPerSession:r.hours_per_session||1, sessionsPerWeek:r.sessions_per_week||1, totalWeeks:r.total_weeks||4, startDate:r.start_date||'', endDate:r.end_date||'', active:r.active!==false, value:r.value||0, notes:r.notes||'', scheduleType:r.schedule_type||'nenhuma', scheduleDayOfWeek:r.schedule_day_of_week||null, scheduleDayOfMonth:r.schedule_day_of_month||null, scheduleIntervalDays:r.schedule_interval_days||null, scheduleSessions:r.schedule_sessions||[] }; }
 
 /* ── JS → DB mappers ── */
 function leadToDb(l){ return {
@@ -1134,7 +1172,7 @@ function leadToDb(l){ return {
   activities:l.activities||[], date:l.date||today()
 }; }
 function taskToDb(t){ return { title:t.title, description:t.desc||null, priority:t.priority, status:t.status, deadline:t.deadline||null }; }
-function mentorshipToDb(m){ return { client:m.client, type:m.type, hours_per_session:m.hoursPerSession, sessions_per_week:m.sessionsPerWeek, total_weeks:m.totalWeeks, start_date:m.startDate||null, active:m.active, value:m.value||0, notes:m.notes||null }; }
+function mentorshipToDb(m){ return { client:m.client, type:m.type, hours_per_session:m.hoursPerSession, sessions_per_week:m.sessionsPerWeek, total_weeks:m.totalWeeks, start_date:m.startDate||null, end_date:m.endDate||null, active:m.active, value:m.value||0, notes:m.notes||null, schedule_type:m.scheduleType||'nenhuma', schedule_day_of_week:m.scheduleDayOfWeek||null, schedule_day_of_month:m.scheduleDayOfMonth||null, schedule_interval_days:m.scheduleIntervalDays||null, schedule_sessions:m.scheduleSessions||[] }; }
 
 /* ══════════════════════════════════════════
    UI HELPERS
@@ -2737,12 +2775,23 @@ function renderThiago(){
   const igLeads = leads.filter(l=>l.origin==='ig_comentario'||l.origin==='ig_seguidor');
   const vetPct  = leads.length?Math.round(leads.filter(l=>l.isVet).length/leads.length*100):0;
 
+  // ── 12-month projection ──
+  const projection = buildProjection(mentorships, 12);
+  const maxProj = Math.max(...projection.map(p=>p.revenue), 1);
+  const MONTHS_PT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const todayStr = today();
+
+  // ── Upcoming sessions across all mentorships ──
+  const allUpcoming = mentorships.flatMap(m=>
+    (m.scheduleSessions||[]).filter(d=>d>=todayStr).slice(0,5).map(d=>({date:d,client:m.client,type:m.type,m}))
+  ).sort((a,b)=>a.date.localeCompare(b.date)).slice(0,10);
+
   el.innerHTML = `
     <div class="stats-grid" style="margin-bottom:16px">
       ${miniKpi('Mentorias Ativas',  active.length,           '#d4af37','rgba(212,175,55,.1)')}
       ${miniKpi('Horas/Semana',      weeklyHours.toFixed(1)+'h', weeklyHours>20?'#ef4444':weeklyHours>10?'#d4af37':'#22c55e', weeklyHours>20?'rgba(239,68,68,.1)':weeklyHours>10?'rgba(212,175,55,.1)':'rgba(34,197,94,.1)')}
+      ${miniKpi('Receita Atual/Mês', fmtMoney(mentorshipRevenue),'#22c55e','rgba(34,197,94,.1)')}
       ${miniKpi('Horas/Mês (est.)',  monthlyHours.toFixed(1)+'h','#a855f7','rgba(168,85,247,.1)')}
-      ${miniKpi('Receita Mentorias', fmtMoney(mentorshipRevenue),'#22c55e','rgba(34,197,94,.1)')}
     </div>
 
     <!-- ALERTA CARGA -->
@@ -2754,29 +2803,91 @@ function renderThiago(){
       <div style="font-size:28px;font-weight:900;color:${loadStatus.c}">${weeklyHours.toFixed(1)}<span style="font-size:14px">h/sem</span></div>
     </div>
 
-    <div style="display:grid;grid-template-columns:1.6fr 1fr;gap:16px;margin-bottom:16px">
+    <!-- PROJEÇÃO 12 MESES -->
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-hd">
+        <div>
+          <span class="card-title">📈 Projeção de Receita — 12 Meses</span>
+          <div style="font-size:10px;color:var(--text3);margin-top:2px">Baseado nas mentorias ativas e suas datas de término</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:18px;font-weight:900;color:var(--gold)">${fmtMoney(projection.reduce((s,p)=>s+p.revenue,0))}</div>
+          <div style="font-size:10px;color:var(--text3)">total projetado</div>
+        </div>
+      </div>
+      <div style="padding:20px 18px 8px">
+        <!-- Chart bars -->
+        <div style="display:flex;align-items:flex-end;gap:6px;height:140px;margin-bottom:8px">
+          ${projection.map((p,i)=>{
+            const h = maxProj>0?Math.round((p.revenue/maxProj)*130):0;
+            const isNow = p.isCurrent;
+            return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:default" title="${p.label}: ${fmtMoney(p.revenue)}">
+              ${p.revenue>0?`<div style="font-size:8px;color:var(--gold);font-weight:700;font-family:var(--mono)">${fmtMoney(p.revenue).replace('R$ ','')}</div>`:`<div style="font-size:8px;color:var(--text3)">—</div>`}
+              <div style="width:100%;height:${Math.max(h,2)}px;border-radius:4px 4px 0 0;background:${isNow?'var(--gold)':p.revenue>0?'rgba(212,175,55,.35)':'rgba(255,255,255,.05)'};transition:height .5s ease;position:relative">
+                ${isNow?`<div style="position:absolute;top:-6px;left:50%;transform:translateX(-50%);width:6px;height:6px;background:var(--gold);border-radius:50%"></div>`:''}
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+        <!-- Month labels -->
+        <div style="display:flex;gap:6px">
+          ${projection.map(p=>`<div style="flex:1;text-align:center;font-size:9px;color:${p.isCurrent?'var(--gold)':'var(--text3)'};font-weight:${p.isCurrent?'700':'400'};font-family:var(--mono)">${p.shortLabel}</div>`).join('')}
+        </div>
+        <!-- Active mentorships per month legend -->
+        <div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:6px">
+          ${projection.filter(p=>p.activeClients.length>0).slice(0,3).map(p=>`
+            <div style="font-size:10px;color:var(--text3);background:var(--surface2);padding:3px 8px;border-radius:5px">
+              <span style="color:var(--text2);font-weight:600">${p.shortLabel}:</span> ${p.activeClients.join(', ')}
+            </div>`).join('')}
+          ${projection.some(p=>p.activeClients.length===0&&projection.indexOf(p)>0)?`<div style="font-size:10px;color:var(--text3);font-style:italic">⚠️ Meses sem receita detectados</div>`:''}
+        </div>
+      </div>
+    </div>
 
-      <!-- MENTORIAS ATIVAS -->
+    <!-- MENTORIAS + VISÃO CRM -->
+    <div style="display:grid;grid-template-columns:1.6fr 1fr;gap:16px;margin-bottom:16px">
       <div class="card">
         <div class="card-hd">
           <span class="card-title">🎓 Mentorias Ativas (${active.length})</span>
           <button class="btn btn-sm btn-gold" onclick="openMentorshipModal()">+ Nova</button>
         </div>
         <div>
-          ${active.length===0?`<div class="empty"><div class="empty-icon">🎓</div><p>Nenhuma mentoria ativa</p><small>Clique em "+ Nova" para cadastrar</small></div>`:''}
+          ${active.length===0?`<div class="empty"><div class="empty-icon">🎓</div><p>Nenhuma mentoria ativa</p></div>`:''}
           ${active.map(m=>mentorshipRow(m)).join('')}
         </div>
       </div>
-
-      <!-- VISÃO CRM + RECADOS -->
       <div style="display:flex;flex-direction:column;gap:12px">
+        <!-- Próximas sessões -->
+        <div class="card">
+          <div class="card-hd"><span class="card-title">📅 Próximas Sessões</span><span class="card-sub">${allUpcoming.length} agendadas</span></div>
+          <div style="max-height:220px;overflow-y:auto">
+            ${allUpcoming.length===0?`<div style="padding:16px;text-align:center;font-size:12px;color:var(--text3)">Nenhuma sessão agendada<br><small>Configure a agenda nas mentorias</small></div>`:
+              allUpcoming.map(s=>{
+                const dt=new Date(s.date+'T00:00:00');
+                const DAYS=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+                const isToday=s.date===todayStr;
+                return `<div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
+                  <div style="width:38px;text-align:center;flex-shrink:0">
+                    <div style="font-size:16px;font-weight:900;color:${isToday?'var(--gold)':'var(--text)'};line-height:1">${dt.getDate()}</div>
+                    <div style="font-size:9px;color:var(--text3);font-family:var(--mono)">${DAYS[dt.getDay()]}</div>
+                  </div>
+                  <div style="flex:1;min-width:0">
+                    <div style="font-size:12px;font-weight:700">${s.client}</div>
+                    <div style="font-size:10px;color:var(--text3)">${s.type}</div>
+                  </div>
+                  ${isToday?`<span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;background:rgba(212,175,55,.1);color:var(--gold)">HOJE</span>`:''}
+                </div>`;
+              }).join('')}
+          </div>
+        </div>
+        <!-- Visão CRM -->
         <div class="card">
           <div class="card-hd"><span class="card-title">📊 Visão Comercial</span></div>
           <div style="padding:12px 16px;display:flex;flex-direction:column;gap:8px">
             ${[
-              ['Total de Leads',  leads.length,         'var(--text)',  'var(--surface2)'],
-              ['Convertidos',     convertedLeads.length, '#22c55e',     'rgba(34,197,94,.07)'],
-              ['Via Instagram DM',igLeads.length,        '#e1306c',     'rgba(225,48,108,.07)'],
+              ['Total de Leads',  leads.length,          'var(--text)',  'var(--surface2)'],
+              ['Convertidos',     convertedLeads.length, '#22c55e',      'rgba(34,197,94,.07)'],
+              ['Via Instagram DM',igLeads.length,        '#e1306c',      'rgba(225,48,108,.07)'],
               ['% Veterinários',  vetPct+'%',            vetPct>=60?'#3b82f6':'var(--red)', vetPct>=60?'rgba(59,130,246,.07)':'rgba(239,68,68,.07)'],
             ].map(([lbl,val,color,bg])=>`
               <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:${bg};border-radius:var(--r-sm)">
@@ -2785,10 +2896,11 @@ function renderThiago(){
               </div>`).join('')}
           </div>
         </div>
+        <!-- Recados do estagiário -->
         <div class="card">
           <div class="card-hd"><span class="card-title">📝 Recados do Estagiário</span></div>
           <div style="padding:12px 16px">
-            <div style="font-size:12.5px;color:var(--text2);line-height:1.7;min-height:60px;white-space:pre-wrap">${estagiarioObs||'<span style="color:var(--text3);font-style:italic">Nenhuma observação ainda.</span>'}</div>
+            <div style="font-size:12.5px;color:var(--text2);line-height:1.7;min-height:50px;white-space:pre-wrap">${estagiarioObs||'<span style="color:var(--text3);font-style:italic">Nenhuma observação ainda.</span>'}</div>
           </div>
         </div>
       </div>
@@ -2800,6 +2912,37 @@ function renderThiago(){
       <div>${inactive.map(m=>mentorshipRow(m)).join('')}</div>
     </div>`:''}
   `;
+}
+
+/* ── 12-month revenue projection ── */
+function buildProjection(allMentorships, months){
+  const now = new Date();
+  const result = [];
+  for(let i=0;i<months;i++){
+    const d = new Date(now.getFullYear(), now.getMonth()+i, 1);
+    const monthStart = new Date(d.getFullYear(), d.getMonth(), 1);
+    const monthEnd   = new Date(d.getFullYear(), d.getMonth()+1, 0);
+    const MONTHS_PT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    const activeInMonth = allMentorships.filter(m=>{
+      if(!m.active && !m.endDate) return false;
+      const start = m.startDate ? new Date(m.startDate+'T00:00:00') : null;
+      const end   = m.endDate   ? new Date(m.endDate+'T00:00:00')   : null;
+      // If no dates set, count as active for active mentorships
+      if(!start && m.active) return true;
+      if(start && start>monthEnd) return false;
+      if(end   && end<monthStart)  return false;
+      return true;
+    });
+    const revenue = activeInMonth.reduce((s,m)=>s+(parseFloat(m.value)||0),0);
+    result.push({
+      label:`${MONTHS_PT[d.getMonth()]} ${d.getFullYear()}`,
+      shortLabel:MONTHS_PT[d.getMonth()],
+      revenue,
+      activeClients:activeInMonth.map(m=>m.client),
+      isCurrent: i===0,
+    });
+  }
+  return result;
 }
 
 function mentorshipRow(m){
@@ -2848,16 +2991,148 @@ function openMentorshipModal(id){
   document.getElementById('mm2-spw').value = m?.sessionsPerWeek||'';
   document.getElementById('mm2-weeks').value = m?.totalWeeks||'';
   document.getElementById('mm2-start').value = m?.startDate||'';
+  document.getElementById('mm2-end').value = m?.endDate||'';
   document.getElementById('mm2-active').value = m ? (m.active?'true':'false') : 'true';
   document.getElementById('mm2-value').value = m?.value||'';
   document.getElementById('mm2-notes').value = m?.notes||'';
+  // Schedule
+  const stype = m?.scheduleType||'nenhuma';
+  document.getElementById('mm2-schedule-type').value = stype;
+  document.getElementById('mm2-day-of-month').value = m?.scheduleDayOfMonth||'';
+  document.getElementById('mm2-interval-days').value = m?.scheduleIntervalDays||'';
+  // Reset weekday buttons
+  [0,1,2,3,4,5,6].forEach(i=>{
+    const btn = document.getElementById('wd-'+i);
+    if(btn){ const days = m?.scheduleDayOfWeek; const active = Array.isArray(days)?days.includes(i):(days===i); btn.style.background=active?'rgba(212,175,55,.15)':'none'; btn.style.color=active?'var(--gold)':'var(--text3)'; btn.style.borderColor=active?'rgba(212,175,55,.4)':'var(--border)'; btn.dataset.sel=active?'1':'0'; }
+  });
+  toggleScheduleOptions();
   openMo('mo-mentorship');
   setTimeout(()=>document.getElementById('mm2-client').focus(),150);
 }
+
+function toggleWeekday(i){
+  const btn = document.getElementById('wd-'+i);
+  const active = btn.dataset.sel !== '1';
+  btn.dataset.sel = active?'1':'0';
+  btn.style.background = active?'rgba(212,175,55,.15)':'none';
+  btn.style.color = active?'var(--gold)':'var(--text3)';
+  btn.style.borderColor = active?'rgba(212,175,55,.4)':'var(--border)';
+}
+
+function toggleScheduleOptions(){
+  const t = document.getElementById('mm2-schedule-type').value;
+  document.getElementById('mm2-schedule-semanal').style.display  = (t==='semanal'||t==='quinzenal')?'':'none';
+  document.getElementById('mm2-schedule-mensal').style.display   = t==='mensal_dia'?'':'none';
+  document.getElementById('mm2-schedule-intervalo').style.display= t==='intervalo'?'':'none';
+  document.getElementById('mm2-schedule-preview').style.display  = t!=='nenhuma'?'':'none';
+}
+
+function updateMentorshipEndDate(){
+  const start = document.getElementById('mm2-start').value;
+  const weeks = parseInt(document.getElementById('mm2-weeks').value)||0;
+  if(start && weeks){
+    const d = new Date(start+'T00:00:00');
+    d.setDate(d.getDate() + weeks*7);
+    document.getElementById('mm2-end').value = d.toISOString().slice(0,10);
+  }
+}
+
+function getSelectedWeekdays(){
+  return [0,1,2,3,4,5,6].filter(i=>{ const btn=document.getElementById('wd-'+i); return btn && btn.dataset.sel==='1'; });
+}
+
+function generateSessions(m){
+  if(!m.startDate || m.scheduleType==='nenhuma') return [];
+  const start = new Date(m.startDate+'T00:00:00');
+  const end   = m.endDate ? new Date(m.endDate+'T00:00:00') : new Date(start.getTime()+m.totalWeeks*7*86400000);
+  const sessions = [];
+  const maxSessions = 200;
+  let cur = new Date(start);
+
+  if(m.scheduleType==='semanal'||m.scheduleType==='quinzenal'){
+    const days = Array.isArray(m.scheduleDayOfWeek)?m.scheduleDayOfWeek:[m.scheduleDayOfWeek].filter(x=>x!=null);
+    if(days.length===0) return [];
+    const step = m.scheduleType==='quinzenal'?14:7;
+    // Find first occurrence
+    while(cur<=end && sessions.length<maxSessions){
+      if(days.includes(cur.getDay())){
+        sessions.push(cur.toISOString().slice(0,10));
+        if(m.scheduleType==='quinzenal') cur = new Date(cur.getTime()+14*86400000);
+        else cur = new Date(cur.getTime()+86400000);
+      } else {
+        cur = new Date(cur.getTime()+86400000);
+      }
+    }
+  } else if(m.scheduleType==='mensal_dia'){
+    const day = m.scheduleDayOfMonth||1;
+    cur = new Date(start.getFullYear(), start.getMonth(), day);
+    if(cur<start) cur.setMonth(cur.getMonth()+1);
+    while(cur<=end && sessions.length<maxSessions){
+      sessions.push(cur.toISOString().slice(0,10));
+      cur.setMonth(cur.getMonth()+1);
+      cur.setDate(day);
+    }
+  } else if(m.scheduleType==='intervalo'){
+    const interval = m.scheduleIntervalDays||15;
+    while(cur<=end && sessions.length<maxSessions){
+      sessions.push(cur.toISOString().slice(0,10));
+      cur = new Date(cur.getTime()+interval*86400000);
+    }
+  }
+  return sessions;
+}
+
+function previewSessions(){
+  const start = document.getElementById('mm2-start').value;
+  const weeks = parseInt(document.getElementById('mm2-weeks').value)||0;
+  const endVal = document.getElementById('mm2-end').value;
+  const schedType = document.getElementById('mm2-schedule-type').value;
+  const mockM = {
+    startDate:start, endDate:endVal||(start&&weeks?new Date(new Date(start+'T00:00:00').getTime()+weeks*7*86400000).toISOString().slice(0,10):''),
+    totalWeeks:weeks, scheduleType:schedType,
+    scheduleDayOfWeek:getSelectedWeekdays(),
+    scheduleDayOfMonth:parseInt(document.getElementById('mm2-day-of-month').value)||null,
+    scheduleIntervalDays:parseInt(document.getElementById('mm2-interval-days').value)||null,
+  };
+  const sessions = generateSessions(mockM);
+  const el = document.getElementById('mm2-preview-list');
+  const MONTHS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const DAYS = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+  if(!sessions.length){ el.innerHTML='<span style="color:var(--red)">Nenhuma sessão gerada. Verifique os campos.</span>'; return; }
+  el.innerHTML = `<span style="color:var(--gold);font-weight:700">${sessions.length} sessões geradas:</span><br>`+sessions.map(d=>{
+    const dt=new Date(d+'T00:00:00');
+    return `📅 ${DAYS[dt.getDay()]}, ${dt.getDate()} ${MONTHS[dt.getMonth()]} ${dt.getFullYear()}`;
+  }).join('<br>');
+}
+
 async function saveMentorship(){
   const client = document.getElementById('mm2-client').value.trim();
   if(!client) return toast('Informe o nome do cliente');
-  const data = { client, type:document.getElementById('mm2-type').value, hoursPerSession:parseFloat(document.getElementById('mm2-hps').value)||0, sessionsPerWeek:parseInt(document.getElementById('mm2-spw').value)||1, totalWeeks:parseInt(document.getElementById('mm2-weeks').value)||0, startDate:document.getElementById('mm2-start').value, active:document.getElementById('mm2-active').value==='true', value:parseFloat(document.getElementById('mm2-value').value)||0, notes:document.getElementById('mm2-notes').value.trim() };
+  const scheduleType = document.getElementById('mm2-schedule-type').value;
+  const startVal = document.getElementById('mm2-start').value;
+  const weeksVal = parseInt(document.getElementById('mm2-weeks').value)||0;
+  // Auto-calc end date
+  let endVal = document.getElementById('mm2-end').value;
+  if(!endVal && startVal && weeksVal){
+    const d = new Date(startVal+'T00:00:00'); d.setDate(d.getDate()+weeksVal*7);
+    endVal = d.toISOString().slice(0,10);
+  }
+  const data = {
+    client, type:document.getElementById('mm2-type').value,
+    hoursPerSession:parseFloat(document.getElementById('mm2-hps').value)||0,
+    sessionsPerWeek:parseInt(document.getElementById('mm2-spw').value)||1,
+    totalWeeks:weeksVal, startDate:startVal, endDate:endVal,
+    active:document.getElementById('mm2-active').value==='true',
+    value:parseFloat(document.getElementById('mm2-value').value)||0,
+    notes:document.getElementById('mm2-notes').value.trim(),
+    scheduleType,
+    scheduleDayOfWeek:scheduleType==='semanal'||scheduleType==='quinzenal'?getSelectedWeekdays():null,
+    scheduleDayOfMonth:scheduleType==='mensal_dia'?(parseInt(document.getElementById('mm2-day-of-month').value)||null):null,
+    scheduleIntervalDays:scheduleType==='intervalo'?(parseInt(document.getElementById('mm2-interval-days').value)||null):null,
+    scheduleSessions:[],
+  };
+  // Generate sessions
+  data.scheduleSessions = generateSessions(data);
   if(editingMentorshipId){
     const {error} = await sb.from('mentorships').update(mentorshipToDb(data)).eq('id', editingMentorshipId);
     if(error) return showError(error.message);
