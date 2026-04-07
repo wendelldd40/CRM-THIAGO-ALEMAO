@@ -1271,11 +1271,8 @@ function renderDashboard() {
   const vetPct      = leads.length ? Math.round(vetLeads.length/leads.length*100) : 0;
   const nonVetPct   = 100 - vetPct;
 
-  // ── Follow-up alerts
+  // ── Follow-up alerts (auto + manual)
   const todayStr = today();
-  const followUpToday    = leads.filter(l=>l.followUp && l.followUp===todayStr && !l.converted);
-  const followUpOverdue  = leads.filter(l=>l.followUp && l.followUp<todayStr && !l.converted);
-  const followUpUpcoming = leads.filter(l=>l.followUp && l.followUp>todayStr && !l.converted);
 
   const el = document.getElementById('dash-content');
   el.innerHTML = `
@@ -1287,34 +1284,8 @@ function renderDashboard() {
       ${statCard('Taxa de Conversão',convRate+'%','','#a855f7','rgba(168,85,247,.1)',iconTrend(),`${fmtMoney(closedVal)} fechado`)}
     </div>
 
-    <!-- ── FOLLOW-UP ALERTS ── -->
-    ${(followUpToday.length||followUpOverdue.length) ? `
-    <div style="margin-bottom:20px">
-      <div style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text3);margin-bottom:10px">🔔 Follow-ups</div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px">
-        ${followUpOverdue.map(l=>`
-          <div onclick="openDetail('${l.id}')" style="cursor:pointer;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:var(--r-sm);padding:8px 12px;display:flex;align-items:center;gap:8px">
-            <span style="font-size:16px">🚨</span>
-            <div>
-              <div style="font-size:12px;font-weight:700;color:var(--red)">${l.name}</div>
-              <div style="font-size:10px;color:var(--text3)">Atrasado — ${fmtDate(l.followUp)}</div>
-            </div>
-          </div>`).join('')}
-        ${followUpToday.map(l=>`
-          <div onclick="openDetail('${l.id}')" style="cursor:pointer;background:rgba(212,175,55,.08);border:1px solid rgba(212,175,55,.25);border-radius:var(--r-sm);padding:8px 12px;display:flex;align-items:center;gap:8px">
-            <span style="font-size:16px">⏰</span>
-            <div>
-              <div style="font-size:12px;font-weight:700;color:var(--gold)">${l.name}</div>
-              <div style="font-size:10px;color:var(--text3)">Hoje!</div>
-            </div>
-          </div>`).join('')}
-        ${followUpUpcoming.length ? `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 12px;display:flex;align-items:center;gap:8px">
-          <span style="font-size:16px">📅</span>
-          <div style="font-size:12px;color:var(--text2)">${followUpUpcoming.length} próximo${followUpUpcoming.length>1?'s':''} agendado${followUpUpcoming.length>1?'s':''}</div>
-        </div>`:''}
-      </div>
-    </div>`:''
-    }
+    <!-- ── FOLLOW-UP CENTRAL (auto + manual) ── -->
+    ${renderFollowUpAlerts()}
 
     <!-- ── INSTAGRAM BREAKDOWN + VET% ── -->
     <div class="dash-grid-3">
@@ -1699,21 +1670,33 @@ function renderLeadsTableBody(){
   const wrap = document.getElementById('leads-table-wrap');
   if(!filtered.length){wrap.innerHTML=`<div class="empty"><div class="empty-icon">🔍</div><p>Nenhum lead encontrado</p></div>`;return;}
   wrap.innerHTML = `<table>
-    <thead><tr><th>Lead</th><th>Empresa</th><th>Funil / Etapa</th><th>Origem</th><th>Valor</th><th>Tags</th><th>Data</th><th></th></tr></thead>
+    <thead><tr><th>Lead</th><th>Empresa</th><th>Funil / Etapa</th><th>Origem</th><th>Valor</th><th>Perfil</th><th>Data</th><th>Ações</th></tr></thead>
     <tbody>
     ${filtered.map(l=>{
       const f=getFunnel(l.funnelId),s=f?.stages.find(st=>st.id===l.stageId);
       const o=ORIGIN_MAP[l.origin]||{l:l.origin,c:'#888',bg:'rgba(128,128,128,.1)'};
       return `<tr onclick="openDetail('${l.id}')" style="cursor:pointer">
-        <td><div class="td-lead"><div class="td-av" style="background:${strColor(l.name)}">${initials(l.name)}</div><div><div class="td-name">${l.name}</div><div class="td-email">${l.email}</div></div></div></td>
+        <td><div class="td-lead"><div class="td-av" style="background:${strColor(l.name)}">${initials(l.name)}</div><div><div class="td-name">${l.name}</div><div class="td-email">${l.email||l.instagram||l.phone||'—'}</div></div></div></td>
         <td><span style="font-size:12px;color:var(--text2)">${l.company||'—'}</span></td>
         <td><span style="font-size:11px;color:var(--text2)">${f?.name||'—'}</span><br><span style="font-size:10px" class="kb-tag" style="background:${s?.color}22;color:${s?.color}">${s?.name||'—'}</span></td>
-        <td><span class="origin-badge" style="background:${o.bg};color:${o.c}">${o.l}</span></td>
+        <td><span class="origin-badge" style="background:${o.bg};color:${o.c}">${o.icon||''} ${o.l}</span></td>
         <td><span style="font-family:var(--mono);font-size:12px;font-weight:700;color:var(--gold)">${fmtMoney(l.value)}</span></td>
-        <td>${(l.tags||[]).map(t=>`<span class="kb-tag" style="background:rgba(212,175,55,.08);color:var(--gold)">${t}</span>`).join(' ')}</td>
+        <td>
+          <div style="display:flex;align-items:center;gap:3px">
+            ${l.isVet?`<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(59,130,246,.1);color:#3b82f6;font-weight:700">VET</span>`:`<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(239,68,68,.08);color:var(--red);font-weight:700">NÃO</span>`}
+            ${l.converted?`<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(34,197,94,.1);color:#22c55e;font-weight:700">✅</span>`:''}
+          </div>
+        </td>
         <td><span style="font-family:var(--mono);font-size:11px;color:var(--text3)">${fmtDate(l.date)}</span></td>
         <td onclick="event.stopPropagation()">
-          <button class="btn btn-sm btn-ghost" onclick="openDetail('${l.id}')">Ver</button>
+          <div style="display:flex;gap:4px;align-items:center">
+            <button class="btn btn-sm btn-ghost" onclick="quickEditLead('${l.id}')" title="Editar" style="padding:4px 7px">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </button>
+            <button class="btn btn-sm btn-ghost" onclick="quickDeleteLead('${l.id}','${l.name.replace(/'/g,"\\'")}')" title="Excluir" style="padding:4px 7px;color:var(--red)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M9 6V4h6v2"/></svg>
+            </button>
+          </div>
         </td>
       </tr>`;
     }).join('')}
@@ -2432,16 +2415,227 @@ async function saveLead(){
 }
 async function deleteCurrentLead(){
   if(!activeLeadId) return;
-  if(!confirm('Excluir este lead?')) return;
-  const {error} = await sb.from('leads').delete().eq('id', activeLeadId);
+  const l = getLead(activeLeadId);
+  showDeleteConfirm(l?.name||'este lead', async ()=>{
+    const {error} = await sb.from('leads').delete().eq('id', activeLeadId);
+    if(error) return showError(error.message);
+    leads = leads.filter(x=>x.id!==activeLeadId);
+    closeDetail();
+    renderSidebar();
+    if(currentPage==='kanban') renderKanban();
+    else if(currentPage==='leads-list') renderLeadsTable();
+    else if(currentPage==='dashboard') renderDashboard();
+    toast('Lead excluído!');
+  });
+}
+
+/* ── Editar lead direto da tabela ── */
+function quickEditLead(id){
+  activeLeadId = id;
+  openEditLead();
+}
+
+/* ── Apagar lead direto da tabela ── */
+function quickDeleteLead(id, name){
+  showDeleteConfirm(name, async ()=>{
+    const {error} = await sb.from('leads').delete().eq('id', id);
+    if(error) return showError(error.message);
+    leads = leads.filter(l=>l.id!==id);
+    if(activeLeadId===id) closeDetail();
+    renderSidebar();
+    if(currentPage==='kanban') renderKanban();
+    else if(currentPage==='leads-list') renderLeadsTable();
+    else if(currentPage==='dashboard') renderDashboard();
+    toast('Lead excluído!');
+  });
+}
+
+/* ── Modal de confirmação de exclusão ── */
+let _deleteCallback = null;
+function showDeleteConfirm(name, onConfirm){
+  _deleteCallback = onConfirm;
+  let modal = document.getElementById('mo-delete-confirm');
+  if(!modal){
+    modal = document.createElement('div');
+    modal.id = 'mo-delete-confirm';
+    modal.className = 'mo';
+    modal.innerHTML = `
+      <div class="modal" style="max-width:380px">
+        <div class="modal-hd">
+          <div><h3 style="color:var(--red)">🗑️ Excluir Lead</h3><p id="del-confirm-msg"></p></div>
+          <button class="modal-close" onclick="closeMo('mo-delete-confirm')"><svg viewBox="0 0 24 24" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        </div>
+        <div style="padding:16px 24px;font-size:13px;color:var(--text2);line-height:1.6">
+          Esta ação <strong style="color:var(--text)">não pode ser desfeita</strong>. O lead e todo o histórico serão removidos permanentemente.
+        </div>
+        <div class="modal-ft">
+          <button class="btn" onclick="closeMo('mo-delete-confirm')">Cancelar</button>
+          <button class="btn" onclick="confirmDelete()" style="background:var(--red);color:#fff;border-color:var(--red);font-weight:700">Sim, excluir</button>
+        </div>
+      </div>`;
+    modal.addEventListener('click', e=>{ if(e.target===modal) closeMo('mo-delete-confirm'); });
+    document.body.appendChild(modal);
+  }
+  document.getElementById('del-confirm-msg').textContent = `Excluir "${name}"?`;
+  openMo('mo-delete-confirm');
+}
+async function confirmDelete(){
+  closeMo('mo-delete-confirm');
+  if(_deleteCallback){ await _deleteCallback(); _deleteCallback=null; }
+}
+
+/* ══════════════════════════════════════════
+   AUTO FOLLOW-UP SYSTEM
+   Regras por etapa do funil:
+   - Primeiro Contato  → alerta a cada 2 dias
+   - Qualificação      → alerta a cada 3 dias
+   - Proposta Enviada  → alerta a cada 2 dias
+   - Negociação        → alerta a cada 1 dia
+   (Etapas identificadas pelo nome, case-insensitive)
+══════════════════════════════════════════ */
+const FOLLOWUP_RULES = [
+  { match: ['primeiro contato','first contact'],            days: 2, label: '1º Contato',    color: '#a855f7' },
+  { match: ['qualificação','qualificacao','qualification'], days: 3, label: 'Qualificação',   color: '#f97316' },
+  { match: ['proposta','proposal','proposta enviada'],      days: 2, label: 'Proposta',       color: '#d97706' },
+  { match: ['negociação','negociacao','negotiation'],       days: 1, label: 'Negociação',     color: '#ef4444' },
+  { match: ['lead novo','new lead','novo'],                 days: 5, label: 'Lead Novo',      color: '#3b82f6' },
+];
+
+function getFollowUpRule(stageName){
+  if(!stageName) return null;
+  const lower = stageName.toLowerCase();
+  return FOLLOWUP_RULES.find(r => r.match.some(m => lower.includes(m))) || null;
+}
+
+function getAutoFollowUpAlerts(){
+  const todayDate = new Date(today()+'T00:00:00');
+  const alerts = [];
+  leads.forEach(l=>{
+    if(l.converted) return;
+    const f = getFunnel(l.funnelId);
+    if(!f) return;
+    const s = f.stages.find(st=>st.id===l.stageId);
+    if(!s) return;
+    const rule = getFollowUpRule(s.name);
+    if(!rule) return;
+
+    // Calculate days since last activity or entry date
+    let lastActivity = l.date;
+    if(l.activities && l.activities.length>0){
+      const lastAct = l.activities[l.activities.length-1];
+      if(lastAct?.time) lastActivity = lastAct.time.slice(0,10);
+    }
+    // Also consider manual followUp date
+    if(l.followUp && l.followUp >= today()) return; // already has future followup set
+
+    const lastDate = new Date(lastActivity+'T00:00:00');
+    const diffDays = Math.floor((todayDate - lastDate) / 86400000);
+
+    if(diffDays >= rule.days){
+      alerts.push({
+        lead: l,
+        stage: s,
+        rule,
+        diffDays,
+        overdue: diffDays > rule.days * 2,
+      });
+    }
+  });
+  // Sort: overdue first, then by days waiting desc
+  return alerts.sort((a,b)=> b.overdue - a.overdue || b.diffDays - a.diffDays);
+}
+
+async function snoozeFollowUp(leadId, days){
+  const l = getLead(leadId); if(!l) return;
+  const d = new Date(); d.setDate(d.getDate()+days);
+  l.followUp = d.toISOString().slice(0,10);
+  l.activities = l.activities||[];
+  l.activities.push({text:`Follow-up adiado por ${days} dia${days>1?'s':''}`, time:new Date().toISOString()});
+  const {error} = await sb.from('leads').update({
+    follow_up: l.followUp,
+    activities: l.activities
+  }).eq('id', leadId);
   if(error) return showError(error.message);
-  leads = leads.filter(l=>l.id!==activeLeadId);
-  closeDetail();
-  renderSidebar();
-  if(currentPage==='kanban') renderKanban();
-  else if(currentPage==='leads-list') renderLeadsTable();
-  else if(currentPage==='dashboard') renderDashboard();
-  toast('Lead excluído');
+  renderDashboard();
+  toast(`Follow-up agendado para ${fmtDate(l.followUp)}`);
+}
+
+async function markFollowUpDone(leadId){
+  const l = getLead(leadId); if(!l) return;
+  l.activities = l.activities||[];
+  l.activities.push({text:'✅ Follow-up realizado', time:new Date().toISOString()});
+  l.followUp = '';
+  const {error} = await sb.from('leads').update({
+    activities: l.activities,
+    follow_up: null
+  }).eq('id', leadId);
+  if(error) return showError(error.message);
+  renderDashboard();
+  if(activeLeadId===leadId) renderDetailPanel(leadId);
+  toast('Follow-up marcado como feito!');
+}
+
+function renderFollowUpAlerts(){
+  const alerts = getAutoFollowUpAlerts();
+  if(!alerts.length) return '';
+
+  const todayStr = today();
+  const manualOverdue = leads.filter(l=>l.followUp && l.followUp<todayStr && !l.converted);
+  const manualToday   = leads.filter(l=>l.followUp && l.followUp===todayStr && !l.converted);
+
+  return `
+    <div style="margin-bottom:20px">
+      <div style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text3);margin-bottom:10px;display:flex;align-items:center;gap:8px">
+        🔔 Central de Follow-ups
+        <span style="background:var(--red);color:#fff;font-size:9px;padding:1px 7px;border-radius:99px">${alerts.length + manualOverdue.length + manualToday.length}</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+
+        ${manualOverdue.map(l=>`
+          <div style="background:rgba(239,68,68,.07);border:1px solid rgba(239,68,68,.2);border-radius:var(--r-sm);padding:10px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <div style="width:8px;height:8px;border-radius:50%;background:var(--red);flex-shrink:0"></div>
+            <div style="flex:1;min-width:0;cursor:pointer" onclick="openDetail('${l.id}')">
+              <div style="font-size:12.5px;font-weight:700;color:var(--red)">${l.name}</div>
+              <div style="font-size:10px;color:var(--text3)">Follow-up atrasado desde ${fmtDate(l.followUp)}</div>
+            </div>
+            <div style="display:flex;gap:5px;flex-shrink:0">
+              <button class="btn btn-sm" onclick="snoozeFollowUp('${l.id}',2)" style="font-size:10px;padding:3px 8px">+2d</button>
+              <button class="btn btn-sm" onclick="markFollowUpDone('${l.id}')" style="font-size:10px;padding:3px 8px;background:rgba(34,197,94,.1);color:#22c55e;border-color:rgba(34,197,94,.2)">✓ Feito</button>
+            </div>
+          </div>`).join('')}
+
+        ${manualToday.map(l=>`
+          <div style="background:rgba(212,175,55,.07);border:1px solid rgba(212,175,55,.25);border-radius:var(--r-sm);padding:10px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <div style="width:8px;height:8px;border-radius:50%;background:var(--gold);flex-shrink:0"></div>
+            <div style="flex:1;min-width:0;cursor:pointer" onclick="openDetail('${l.id}')">
+              <div style="font-size:12.5px;font-weight:700;color:var(--gold)">${l.name}</div>
+              <div style="font-size:10px;color:var(--text3)">⏰ Follow-up manual hoje</div>
+            </div>
+            <div style="display:flex;gap:5px;flex-shrink:0">
+              <button class="btn btn-sm" onclick="snoozeFollowUp('${l.id}',1)" style="font-size:10px;padding:3px 8px">+1d</button>
+              <button class="btn btn-sm" onclick="markFollowUpDone('${l.id}')" style="font-size:10px;padding:3px 8px;background:rgba(34,197,94,.1);color:#22c55e;border-color:rgba(34,197,94,.2)">✓ Feito</button>
+            </div>
+          </div>`).join('')}
+
+        ${alerts.map(a=>`
+          <div style="background:${a.overdue?'rgba(239,68,68,.05)':'rgba(255,255,255,.02)'};border:1px solid ${a.overdue?'rgba(239,68,68,.2)':'var(--border)'};border-left:3px solid ${a.rule.color};border-radius:var(--r-sm);padding:10px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <div style="flex:1;min-width:0;cursor:pointer" onclick="openDetail('${a.lead.id}')">
+              <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                <span style="font-size:12.5px;font-weight:700">${a.lead.name}</span>
+                <span style="font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;background:${a.rule.color}18;color:${a.rule.color}">${a.rule.label}</span>
+                ${a.lead.instagram?`<span style="font-size:10px;color:#e1306c">${a.lead.instagram}</span>`:''}
+              </div>
+              <div style="font-size:10px;color:var(--text3);margin-top:2px">
+                ${a.overdue?'🚨':'⏰'} ${a.diffDays} dia${a.diffDays>1?'s':''} sem contato · regra: contatar a cada ${a.rule.days}d na etapa "${a.stage.name}"
+              </div>
+            </div>
+            <div style="display:flex;gap:5px;flex-shrink:0">
+              <button class="btn btn-sm" onclick="snoozeFollowUp('${a.lead.id}',${a.rule.days})" style="font-size:10px;padding:3px 8px">+${a.rule.days}d</button>
+              <button class="btn btn-sm" onclick="markFollowUpDone('${a.lead.id}')" style="font-size:10px;padding:3px 8px;background:rgba(34,197,94,.1);color:#22c55e;border-color:rgba(34,197,94,.2)">✓ Feito</button>
+            </div>
+          </div>`).join('')}
+      </div>
+    </div>`;
 }
 async function addNote(){
   const inp = document.getElementById('dp-note-input');
@@ -2652,6 +2846,9 @@ function renderEstagiario(){
       ${miniKpi('Em Andamento',      tasksByStatus('em_andamento').length,'#a855f7','rgba(168,85,247,.1)')}
       ${miniKpi('Concluídas',        tasksByStatus('concluida').length,'#22c55e','rgba(34,197,94,.1)')}
     </div>
+
+    <!-- FOLLOW-UPS AUTOMÁTICOS -->
+    ${renderFollowUpAlerts()}
 
     <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:16px;margin-bottom:20px">
 
