@@ -1494,6 +1494,8 @@ function renderKanban() {
   renderKanbanBoard();
 }
 
+let kanbanSearch = '';
+
 function renderKanbanTabs(){
   const el = document.getElementById('kb-toolbar');
   el.innerHTML = `
@@ -1507,14 +1509,35 @@ function renderKanbanTabs(){
         </button>`;
       }).join('')}
     </div>
+    <!-- BUSCA NO KANBAN -->
+    <div style="position:relative;flex-shrink:0">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position:absolute;left:8px;top:50%;transform:translateY(-50%);width:12px;height:12px;stroke:var(--text3);pointer-events:none"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" id="kb-search-input" placeholder="Buscar lead…" value="${kanbanSearch}"
+        oninput="setKanbanSearch(this.value)"
+        style="padding:5px 10px 5px 26px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-sm);font-size:12px;font-family:var(--font);color:var(--text);outline:none;width:160px;transition:.15s"
+        onfocus="this.style.borderColor='var(--gold)';this.style.boxShadow='0 0 0 3px rgba(212,175,55,.08)'"
+        onblur="this.style.borderColor='var(--border)';this.style.boxShadow='none'"
+      >
+      ${kanbanSearch?`<button onclick="setKanbanSearch('')" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;line-height:1;padding:0" title="Limpar">×</button>`:''}
+    </div>
     <button class="btn btn-sm btn-ghost" onclick="openFunnelStagesModal()" title="Editar etapas">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 0-14.14 0M4.93 19.07a10 10 0 0 0 14.14 0"/></svg>
     </button>
   `;
 }
 
+function setKanbanSearch(val){
+  kanbanSearch = val;
+  renderKanbanTabs(); // re-render tabs to update X button
+  renderKanbanBoard();
+  // Re-focus input after re-render
+  const inp = document.getElementById('kb-search-input');
+  if(inp){ inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+}
+
 function switchFunnel(id){
   activeFunnelId = id;
+  kanbanSearch = ''; // clear search when switching funnel
   renderSidebar();
   renderKanbanTabs();
   renderKanbanBoard();
@@ -1524,20 +1547,39 @@ function renderKanbanBoard(){
   const board = document.getElementById('kb-board');
   const f = getFunnel(activeFunnelId);
   if(!f){ board.innerHTML='<div class="empty"><div class="empty-icon">📋</div><p>Selecione ou crie um funil</p></div>'; return; }
+
+  const q = kanbanSearch.trim().toLowerCase();
+
   board.innerHTML = f.stages.map(s=>{
-    const sLeads = leads.filter(l=>l.funnelId===f.id&&l.stageId===s.id);
+    let sLeads = leads.filter(l=>l.funnelId===f.id && l.stageId===s.id);
+
+    // Filter by search
+    if(q){
+      sLeads = sLeads.filter(l=>
+        l.name.toLowerCase().includes(q) ||
+        (l.email||'').toLowerCase().includes(q) ||
+        (l.instagram||'').toLowerCase().includes(q) ||
+        (l.phone||'').includes(q) ||
+        (l.company||'').toLowerCase().includes(q)
+      );
+    }
+
+    const isEmpty = sLeads.length === 0;
+    const emptyMsg = q
+      ? `<div style="font-size:11px;color:var(--text3);text-align:center;padding:20px 0;opacity:.6">Nenhum resultado para<br><strong style="color:var(--gold)">"${kanbanSearch}"</strong></div>`
+      : `<div style="font-size:11px;color:var(--text3);text-align:center;padding:20px 0;opacity:.5">Sem leads</div>`;
+
     return `<div class="kb-col" id="col-${s.id}" data-stage="${s.id}" ondragover="onDragOver(event,this)" ondrop="onDrop(event,this)" ondragleave="onDragLeave(this)">
       <div class="kb-col-hd">
         <div class="kb-col-info">
           <div class="kb-col-dot" style="background:${s.color}"></div>
           <span class="kb-col-name">${s.name}</span>
         </div>
-        <span class="kb-col-badge">${sLeads.length}</span>
+        <span class="kb-col-badge" style="${q&&sLeads.length>0?'background:rgba(212,175,55,.15);color:var(--gold)':''}">${sLeads.length}${q?'/'+leads.filter(l=>l.funnelId===f.id&&l.stageId===s.id).length:''}</span>
       </div>
       <div class="kb-col-stripe" style="background:${s.color}"></div>
       <div class="kb-cards" id="cards-${s.id}" data-stage="${s.id}">
-        ${sLeads.length===0?`<div style="font-size:11px;color:var(--text3);text-align:center;padding:20px 0;opacity:.5">Sem leads</div>`:''}
-        ${sLeads.map(l=>renderKbCard(l,s)).join('')}
+        ${isEmpty ? emptyMsg : sLeads.map(l=>renderKbCard(l, s, q)).join('')}
       </div>
       <button class="kb-add-card" onclick="openLeadModalForStage('${f.id}','${s.id}')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -1546,15 +1588,27 @@ function renderKanbanBoard(){
     </div>`;
   }).join('');
   initDragDrop();
-  // Initialize touch drag for mobile
   setTimeout(initTouchDrag, 50);
 }
 
-function renderKbCard(l,s){
+function highlightText(text, q){
+  if(!q || !text) return text;
+  const idx = text.toLowerCase().indexOf(q.toLowerCase());
+  if(idx === -1) return text;
+  return text.slice(0,idx) +
+    `<mark style="background:rgba(212,175,55,.3);color:var(--gold);border-radius:2px;padding:0 1px">${text.slice(idx, idx+q.length)}</mark>` +
+    text.slice(idx+q.length);
+}
+
+function renderKbCard(l, s, q=''){
   const o = ORIGIN_MAP[l.origin]||{l:l.origin,c:'#888',bg:'rgba(128,128,128,.1)',icon:''};
   const tags = (l.tags||[]).slice(0,2).map(t=>`<span class="kb-tag" style="background:rgba(212,175,55,.1);color:var(--gold)">${t}</span>`).join('');
   const todayStr = today();
   const fuAlert = l.followUp && !l.converted ? (l.followUp<todayStr?'🚨':l.followUp===todayStr?'⏰':'') : '';
+  const displayName = highlightText(l.name, q);
+  const displayIg   = l.instagram ? highlightText(l.instagram, q) : '';
+  const displayComp = l.company   ? highlightText(l.company, q)   : '';
+
   return `<div class="kb-card" id="kcard-${l.id}" data-lead="${l.id}" draggable="true"
     ondragstart="onDragStart(event,this)" ondragend="onDragEnd(event,this)"
     onclick="openDetail('${l.id}')">
@@ -1564,8 +1618,8 @@ function renderKbCard(l,s){
       </div>
       <div class="kb-card-avatar" style="background:${strColor(l.name)}">${initials(l.name)}</div>
       <div style="flex:1;min-width:0">
-        <div class="kb-card-name">${fuAlert?`<span style="font-size:12px">${fuAlert}</span> `:''}${l.name}</div>
-        ${l.instagram?`<div style="font-size:9px;color:#e1306c;margin-top:1px;font-family:var(--mono)">${l.instagram}</div>`:l.company?`<div style="font-size:10px;color:var(--text3);margin-top:1px">${l.company}</div>`:''}
+        <div class="kb-card-name">${fuAlert?`<span style="font-size:12px">${fuAlert}</span> `:''}${displayName}</div>
+        ${l.instagram?`<div style="font-size:9px;color:#e1306c;margin-top:1px;font-family:var(--mono)">${displayIg}</div>`:l.company?`<div style="font-size:10px;color:var(--text3);margin-top:1px">${displayComp}</div>`:''}
       </div>
       <div class="kb-card-menu" onclick="event.stopPropagation();openDetail('${l.id}')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
@@ -3135,18 +3189,151 @@ function renderThiago(){
   const igLeads = leads.filter(l=>l.origin==='ig_comentario'||l.origin==='ig_seguidor');
   const vetPct  = leads.length?Math.round(leads.filter(l=>l.isVet).length/leads.length*100):0;
 
+  // ── Vendas por perfil (funis de planilha)
+  // Detecta funis de gestores e autônomos pelo nome
+  const funnelGestores  = funnels.filter(f=>f.name.toLowerCase().includes('gestor'));
+  const funnelAutonomos = funnels.filter(f=>f.name.toLowerCase().includes('autôn') || f.name.toLowerCase().includes('auton'));
+
+  const leadsGestores  = leads.filter(l=> funnelGestores.some(f=>f.id===l.funnelId));
+  const leadsAutonomos = leads.filter(l=> funnelAutonomos.some(f=>f.id===l.funnelId));
+
+  // Também conta por tag (leads importados têm tag 'planilha')
+  const gestoresPlanilha  = leads.filter(l=>(l.tags||[]).includes('planilha') && funnelGestores.some(f=>f.id===l.funnelId));
+  const autonomosPlanilha = leads.filter(l=>(l.tags||[]).includes('planilha') && funnelAutonomos.some(f=>f.id===l.funnelId));
+
+  // Leads convertidos por perfil (em qualquer funil)
+  const gestoresConv  = leads.filter(l=>l.converted && funnelGestores.some(f=>f.id===l.funnelId));
+  const autonomosConv = leads.filter(l=>l.converted && funnelAutonomos.some(f=>f.id===l.funnelId));
+
+  // Revenue por perfil
+  const revGestores  = leadsGestores.reduce((s,l)=>s+(l.value||0),0);
+  const revAutonomos = leadsAutonomos.reduce((s,l)=>s+(l.value||0),0);
+
+  // Total planilha
+  const totalPlanilha = gestoresPlanilha.length + autonomosPlanilha.length;
+  const pctGestores  = totalPlanilha > 0 ? Math.round(gestoresPlanilha.length / totalPlanilha * 100) : 0;
+  const pctAutonomos = totalPlanilha > 0 ? Math.round(autonomosPlanilha.length / totalPlanilha * 100) : 0;
+
   // ── 12-month projection ──
   const projection = buildProjection(mentorships, 12);
   const maxProj = Math.max(...projection.map(p=>p.revenue), 1);
-  const MONTHS_PT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   const todayStr = today();
 
-  // ── Upcoming sessions across all mentorships ──
+  // ── Upcoming sessions ──
   const allUpcoming = mentorships.flatMap(m=>
     (m.scheduleSessions||[]).filter(d=>d>=todayStr).slice(0,5).map(d=>({date:d,client:m.client,type:m.type,m}))
   ).sort((a,b)=>a.date.localeCompare(b.date)).slice(0,10);
 
   el.innerHTML = `
+
+    <!-- ══ PAINEL DE VENDAS POR PERFIL ══ -->
+    <div class="card" style="margin-bottom:16px;overflow:visible">
+      <div class="card-hd" style="background:linear-gradient(135deg,rgba(37,99,235,.08),rgba(5,150,105,.08));border-bottom:1px solid var(--border)">
+        <div>
+          <span class="card-title" style="font-size:14px">🎯 Vendas por Perfil de Cliente</span>
+          <div style="font-size:10px;color:var(--text3);margin-top:2px">Gestores vs Veterinários Autônomos</div>
+        </div>
+        <div style="font-size:11px;color:var(--text3);font-family:var(--mono)">${totalPlanilha} leads importados</div>
+      </div>
+      <div style="padding:16px 18px">
+
+        <!-- Big numbers side by side -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+
+          <!-- GESTORES -->
+          <div style="background:rgba(37,99,235,.06);border:1px solid rgba(37,99,235,.2);border-radius:var(--r);padding:16px;position:relative;overflow:hidden">
+            <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#2563eb,#3b82f6)"></div>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+              <div style="width:32px;height:32px;border-radius:8px;background:rgba(37,99,235,.15);display:flex;align-items:center;justify-content:center;font-size:16px">📊</div>
+              <div>
+                <div style="font-size:11px;font-weight:700;color:#3b82f6;text-transform:uppercase;letter-spacing:.6px">Gestores Vet.</div>
+                <div style="font-size:9px;color:var(--text3)">da planilha</div>
+              </div>
+            </div>
+            <div style="font-size:42px;font-weight:900;color:#2563eb;letter-spacing:-.04em;line-height:1">${leadsGestores.length}</div>
+            <div style="font-size:10px;color:var(--text3);margin-top:4px">leads registrados</div>
+            <div style="margin-top:10px;display:flex;flex-direction:column;gap:5px">
+              <div style="display:flex;justify-content:space-between;font-size:11px">
+                <span style="color:var(--text3)">Convertidos</span>
+                <span style="font-weight:700;color:#22c55e">${gestoresConv.length}</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;font-size:11px">
+                <span style="color:var(--text3)">Pipeline</span>
+                <span style="font-weight:700;color:var(--gold)">${fmtMoney(revGestores)}</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;font-size:11px">
+                <span style="color:var(--text3)">% do total</span>
+                <span style="font-weight:700;color:#3b82f6">${pctGestores}%</span>
+              </div>
+            </div>
+            <!-- mini bar -->
+            <div style="margin-top:10px;height:4px;border-radius:99px;background:rgba(37,99,235,.15);overflow:hidden">
+              <div style="height:100%;width:${pctGestores}%;background:#2563eb;border-radius:99px;transition:width .6s ease"></div>
+            </div>
+          </div>
+
+          <!-- AUTÔNOMOS -->
+          <div style="background:rgba(5,150,105,.06);border:1px solid rgba(5,150,105,.2);border-radius:var(--r);padding:16px;position:relative;overflow:hidden">
+            <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#059669,#10b981)"></div>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+              <div style="width:32px;height:32px;border-radius:8px;background:rgba(5,150,105,.15);display:flex;align-items:center;justify-content:center;font-size:16px">🩺</div>
+              <div>
+                <div style="font-size:11px;font-weight:700;color:#059669;text-transform:uppercase;letter-spacing:.6px">Autônomos Vet.</div>
+                <div style="font-size:9px;color:var(--text3)">da planilha</div>
+              </div>
+            </div>
+            <div style="font-size:42px;font-weight:900;color:#059669;letter-spacing:-.04em;line-height:1">${leadsAutonomos.length}</div>
+            <div style="font-size:10px;color:var(--text3);margin-top:4px">leads registrados</div>
+            <div style="margin-top:10px;display:flex;flex-direction:column;gap:5px">
+              <div style="display:flex;justify-content:space-between;font-size:11px">
+                <span style="color:var(--text3)">Convertidos</span>
+                <span style="font-weight:700;color:#22c55e">${autonomosConv.length}</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;font-size:11px">
+                <span style="color:var(--text3)">Pipeline</span>
+                <span style="font-weight:700;color:var(--gold)">${fmtMoney(revAutonomos)}</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;font-size:11px">
+                <span style="color:var(--text3)">% do total</span>
+                <span style="font-weight:700;color:#059669">${pctAutonomos}%</span>
+              </div>
+            </div>
+            <!-- mini bar -->
+            <div style="margin-top:10px;height:4px;border-radius:99px;background:rgba(5,150,105,.15);overflow:hidden">
+              <div style="height:100%;width:${pctAutonomos}%;background:#059669;border-radius:99px;transition:width .6s ease"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Barra proporcional comparativa -->
+        <div style="margin-bottom:6px;display:flex;justify-content:space-between;font-size:10px;color:var(--text3)">
+          <span style="color:#3b82f6;font-weight:700">📊 Gestores ${pctGestores}%</span>
+          <span style="color:#059669;font-weight:700">${pctAutonomos}% Autônomos 🩺</span>
+        </div>
+        <div style="height:10px;border-radius:99px;overflow:hidden;display:flex">
+          <div style="width:${pctGestores}%;background:linear-gradient(90deg,#2563eb,#3b82f6);transition:width .6s ease;min-width:${leadsGestores.length>0?'4px':'0'}"></div>
+          <div style="width:${pctAutonomos}%;background:linear-gradient(90deg,#059669,#10b981);transition:width .6s ease;min-width:${leadsAutonomos.length>0?'4px':'0'}"></div>
+        </div>
+
+        <!-- Totais rápidos -->
+        <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+          <div style="flex:1;min-width:120px;background:var(--surface2);border-radius:var(--r-sm);padding:10px 14px;display:flex;align-items:center;justify-content:space-between">
+            <span style="font-size:11px;color:var(--text3)">Total Leads Planilha</span>
+            <span style="font-size:18px;font-weight:900;color:var(--text)">${totalPlanilha}</span>
+          </div>
+          <div style="flex:1;min-width:120px;background:rgba(34,197,94,.07);border:1px solid rgba(34,197,94,.15);border-radius:var(--r-sm);padding:10px 14px;display:flex;align-items:center;justify-content:space-between">
+            <span style="font-size:11px;color:var(--text3)">Total Convertidos</span>
+            <span style="font-size:18px;font-weight:900;color:#22c55e">${gestoresConv.length + autonomosConv.length}</span>
+          </div>
+          <div style="flex:1;min-width:120px;background:rgba(212,175,55,.07);border:1px solid rgba(212,175,55,.15);border-radius:var(--r-sm);padding:10px 14px;display:flex;align-items:center;justify-content:space-between">
+            <span style="font-size:11px;color:var(--text3)">Pipeline Total</span>
+            <span style="font-size:16px;font-weight:900;color:var(--gold)">${fmtMoney(revGestores+revAutonomos)}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ KPIs DE MENTORIAS ══ -->
     <div class="stats-grid" style="margin-bottom:16px">
       ${miniKpi('Mentorias Ativas',  active.length,           '#d4af37','rgba(212,175,55,.1)')}
       ${miniKpi('Horas/Semana',      weeklyHours.toFixed(1)+'h', weeklyHours>20?'#ef4444':weeklyHours>10?'#d4af37':'#22c55e', weeklyHours>20?'rgba(239,68,68,.1)':weeklyHours>10?'rgba(212,175,55,.1)':'rgba(34,197,94,.1)')}
@@ -3176,7 +3363,6 @@ function renderThiago(){
         </div>
       </div>
       <div style="padding:20px 18px 8px">
-        <!-- Chart bars -->
         <div style="display:flex;align-items:flex-end;gap:6px;height:140px;margin-bottom:8px">
           ${projection.map((p,i)=>{
             const h = maxProj>0?Math.round((p.revenue/maxProj)*130):0;
@@ -3189,11 +3375,9 @@ function renderThiago(){
             </div>`;
           }).join('')}
         </div>
-        <!-- Month labels -->
         <div style="display:flex;gap:6px">
           ${projection.map(p=>`<div style="flex:1;text-align:center;font-size:9px;color:${p.isCurrent?'var(--gold)':'var(--text3)'};font-weight:${p.isCurrent?'700':'400'};font-family:var(--mono)">${p.shortLabel}</div>`).join('')}
         </div>
-        <!-- Active mentorships per month legend -->
         <div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:6px">
           ${projection.filter(p=>p.activeClients.length>0).slice(0,3).map(p=>`
             <div style="font-size:10px;color:var(--text3);background:var(--surface2);padding:3px 8px;border-radius:5px">
@@ -3217,7 +3401,6 @@ function renderThiago(){
         </div>
       </div>
       <div style="display:flex;flex-direction:column;gap:12px">
-        <!-- Próximas sessões -->
         <div class="card">
           <div class="card-hd"><span class="card-title">📅 Próximas Sessões</span><span class="card-sub">${allUpcoming.length} agendadas</span></div>
           <div style="max-height:220px;overflow-y:auto">
@@ -3240,7 +3423,6 @@ function renderThiago(){
               }).join('')}
           </div>
         </div>
-        <!-- Visão CRM -->
         <div class="card">
           <div class="card-hd"><span class="card-title">📊 Visão Comercial</span></div>
           <div style="padding:12px 16px;display:flex;flex-direction:column;gap:8px">
@@ -3256,7 +3438,6 @@ function renderThiago(){
               </div>`).join('')}
           </div>
         </div>
-        <!-- Recados do estagiário -->
         <div class="card">
           <div class="card-hd"><span class="card-title">📝 Recados do Estagiário</span></div>
           <div style="padding:12px 16px">
