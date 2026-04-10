@@ -1267,32 +1267,37 @@ function renderDashboard() {
   const period = parseInt(document.getElementById('dash-period').value) || 99999;
   const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - period);
   const inPeriod = l => period===99999 || new Date(l.date) >= cutoff;
-  const pLeads = leads.filter(inPeriod);
-  const totalVal = leads.reduce((s,l)=>s+(l.value||0),0);
-  const convertedLeads = leads.filter(l=>l.converted);
-  const closedLeads = leads.filter(l=>{
+
+  // ── Exclui leads da planilha de todas as métricas operacionais
+  const isOp = l => !(l.tags||[]).includes('planilha');
+  const opLeads = leads.filter(isOp);
+
+  const pLeads      = opLeads.filter(inPeriod);
+  const totalVal    = opLeads.reduce((s,l)=>s+(l.value||0),0);
+  const convertedLeads = opLeads.filter(l=>l.converted);
+  const closedLeads = opLeads.filter(l=>{
     const f=getFunnel(l.funnelId); if(!f)return false;
     const last=f.stages[f.stages.length-1];
     return last && l.stageId===last.id;
   });
   const closedVal = closedLeads.reduce((s,l)=>s+(l.value||0),0);
-  const convRate = leads.length ? Math.round(closedLeads.length/leads.length*100) : 0;
+  const convRate = opLeads.length ? Math.round(closedLeads.length/opLeads.length*100) : 0;
 
-  // ── Instagram stats
-  const igComentario = leads.filter(l=>l.origin==='ig_comentario');
-  const igSeguidor   = leads.filter(l=>l.origin==='ig_seguidor');
+  // ── Instagram stats (só operacionais)
+  const igComentario = opLeads.filter(l=>l.origin==='ig_comentario');
+  const igSeguidor   = opLeads.filter(l=>l.origin==='ig_seguidor');
   const igTotal      = igComentario.length + igSeguidor.length;
 
-  // ── WhatsApp
-  const wppLeads = leads.filter(l=>l.origin==='whatsapp');
+  // ── WhatsApp (só operacionais)
+  const wppLeads = opLeads.filter(l=>l.origin==='whatsapp');
 
-  // ── Frio (indicação / orgânico / evento)
-  const frioLeads = leads.filter(l=>['indicacao','organico','evento'].includes(l.origin));
+  // ── Frio (só operacionais)
+  const frioLeads = opLeads.filter(l=>['indicacao','organico','evento'].includes(l.origin));
 
-  // ── Vet vs não-vet (tráfego sujo)
-  const vetLeads    = leads.filter(l=>l.isVet===true);
-  const nonVetLeads = leads.filter(l=>l.isVet===false);
-  const vetPct      = leads.length ? Math.round(vetLeads.length/leads.length*100) : 0;
+  // ── Vet vs não-vet (só operacionais — tráfego sujo real)
+  const vetLeads    = opLeads.filter(l=>l.isVet===true);
+  const nonVetLeads = opLeads.filter(l=>l.isVet===false);
+  const vetPct      = opLeads.length ? Math.round(vetLeads.length/opLeads.length*100) : 0;
   const nonVetPct   = 100 - vetPct;
 
   // ── Follow-up alerts (auto + manual)
@@ -1302,7 +1307,7 @@ function renderDashboard() {
   el.innerHTML = `
     <!-- ── TOP STATS ── -->
     <div class="stats-grid">
-      ${statCard('Leads Totais',leads.length,'','#3b82f6','rgba(59,130,246,.1)',iconUsers(),'Todos os funis')}
+      ${statCard('Leads Totais',opLeads.length,'','#3b82f6','rgba(59,130,246,.1)',iconUsers(),'Excl. planilha')}
       ${statCard('Receita Potencial',fmtMoney(totalVal),'','#d4af37','rgba(212,175,55,.1)',iconMoney(),'Pipeline total')}
       ${statCard('Convertidos',convertedLeads.length,'','#22c55e','rgba(34,197,94,.1)',iconCheck(),convertedLeads.length?`Média: ${Math.round(convertedLeads.reduce((s,l)=>s+(l.serviceMonths||0),0)/convertedLeads.length)} meses serviço`:'Nenhum ainda')}
       ${statCard('Taxa de Conversão',convRate+'%','','#a855f7','rgba(168,85,247,.1)',iconTrend(),`${fmtMoney(closedVal)} fechado`)}
@@ -1363,7 +1368,7 @@ function renderDashboard() {
             <div style="display:flex;flex-direction:column;gap:4px">
               <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">❄️ Frio / Outros</div>
               ${['indicacao','organico','evento'].map(k=>{
-                const n=leads.filter(l=>l.origin===k).length;
+                const n=opLeads.filter(l=>l.origin===k).length;
                 if(!n)return '';
                 const o=ORIGIN_MAP[k];
                 return `<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;background:var(--surface2);border-radius:5px">
@@ -1395,7 +1400,7 @@ function renderDashboard() {
               <div style="font-size:10px;color:var(--text3);margin-top:2px">${nonVetLeads.length} leads</div>
             </div>
           </div>
-          ${leads.length>0?`
+          ${opLeads.length>0?`
           <div style="font-size:10px;color:var(--text3);margin-bottom:4px">Proporção</div>
           <div style="height:8px;border-radius:99px;overflow:hidden;display:flex;gap:2px">
             <div style="flex:${vetLeads.length||0};background:#22c55e;border-radius:99px 0 0 99px;min-width:${vetLeads.length>0?'4px':'0'}"></div>
@@ -1442,43 +1447,55 @@ function iconCheck(){return`<svg viewBox="0 0 24 24" fill="none" stroke="current
 function iconTrend(){return`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>`}
 
 function renderFunnelBars(){
-  return funnels.map(f=>{
-    const n = leads.filter(l=>l.funnelId===f.id).length;
-    const max = Math.max(...funnels.map(ff=>leads.filter(l=>l.funnelId===ff.id).length),1);
+  // Exclude planilha funnels from this operational view
+  const opFunnels = funnels.filter(f=>
+    !f.name.toLowerCase().includes('planilha') &&
+    !f.name.toLowerCase().includes('gestor') &&
+    !f.name.toLowerCase().includes('autôn') &&
+    !f.name.toLowerCase().includes('auton')
+  );
+  const opLeadsAll = leads.filter(l=>!(l.tags||[]).includes('planilha'));
+  return opFunnels.map(f=>{
+    const n = opLeadsAll.filter(l=>l.funnelId===f.id).length;
+    const max = Math.max(...opFunnels.map(ff=>opLeadsAll.filter(l=>l.funnelId===ff.id).length),1);
     const pct = Math.round(n/max*100);
     return `<div class="funnel-row">
       <span class="funnel-row-lbl">${f.icon} ${f.name}</span>
       <div class="funnel-track"><div class="funnel-fill" style="width:${pct}%;background:${f.color}"><span>${n}</span></div></div>
       <span class="funnel-n">${n}</span>
     </div>`;
-  }).join('');
+  }).join('') || '<div style="font-size:12px;color:var(--text3);padding:8px">Nenhum funil operacional</div>';
 }
 
 function renderOriginChart(){
+  // Only operational leads (exclude planilha)
+  const opLeadsAll = leads.filter(l=>!(l.tags||[]).includes('planilha'));
   const counts = {};
-  leads.forEach(l=>{counts[l.origin]=(counts[l.origin]||0)+1});
+  opLeadsAll.forEach(l=>{counts[l.origin]=(counts[l.origin]||0)+1});
   const sorted = Object.entries(counts).sort((a,b)=>b[1]-a[1]);
   const max = sorted[0]?.[1]||1;
   return sorted.map(([k,n])=>{
     const o = ORIGIN_MAP[k]||{l:k,c:'#888',bg:'rgba(128,128,128,.1)'};
     return `<div class="funnel-row">
-      <span class="funnel-row-lbl">${o.l}</span>
+      <span class="funnel-row-lbl">${o.icon||''} ${o.l}</span>
       <div class="funnel-track"><div class="funnel-fill" style="width:${Math.round(n/max*100)}%;background:${o.c}"><span>${n}</span></div></div>
       <span class="funnel-n">${n}</span>
     </div>`;
-  }).join('');
+  }).join('') || '<div style="font-size:12px;color:var(--text3);padding:8px">Sem dados</div>';
 }
 
 function renderRecentLeadsRows(){
-  const recent = [...leads].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,6);
+  // Only operational leads
+  const opLeadsAll = leads.filter(l=>!(l.tags||[]).includes('planilha'));
+  const recent = [...opLeadsAll].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,6);
   return `<table><thead><tr><th>Lead</th><th>Funil / Etapa</th><th>Origem</th><th>Valor</th><th>Data</th></tr></thead><tbody>
     ${recent.map(l=>{
       const f=getFunnel(l.funnelId),s=f?.stages.find(st=>st.id===l.stageId);
       const o=ORIGIN_MAP[l.origin]||{l:l.origin,c:'#888'};
       return `<tr onclick="openDetail('${l.id}')" style="cursor:pointer">
-        <td><div class="td-lead"><div class="td-av" style="background:${strColor(l.name)}">${initials(l.name)}</div><div><div class="td-name">${l.name}</div><div class="td-email">${l.email}</div></div></div></td>
+        <td><div class="td-lead"><div class="td-av" style="background:${strColor(l.name)}">${initials(l.name)}</div><div><div class="td-name">${l.name}</div><div class="td-email">${l.email||l.instagram||l.phone||'—'}</div></div></div></td>
         <td><span style="font-size:11px;color:var(--text2)">${f?.name||'—'}</span><br><span style="font-size:10px;color:var(--text3)">${s?.name||'—'}</span></td>
-        <td><span class="origin-badge" style="background:${o.c}18;color:${o.c}">${o.l}</span></td>
+        <td><span class="origin-badge" style="background:${o.c}18;color:${o.c}">${o.icon||''} ${o.l}</span></td>
         <td><span style="font-family:var(--mono);font-size:12px;font-weight:600;color:var(--gold)">${fmtMoney(l.value)}</span></td>
         <td><span style="font-family:var(--mono);font-size:11px;color:var(--text3)">${fmtDate(l.date)}</span></td>
       </tr>`;
@@ -2729,6 +2746,7 @@ function getAutoFollowUpAlerts(){
   const alerts = [];
   leads.forEach(l=>{
     if(l.converted) return;
+    if((l.tags||[]).includes('planilha')) return; // ignora leads da planilha
     const f = getFunnel(l.funnelId);
     if(!f) return;
     const s = f.stages.find(st=>st.id===l.stageId);
@@ -2797,8 +2815,8 @@ function renderFollowUpAlerts(){
   if(!alerts.length) return '';
 
   const todayStr = today();
-  const manualOverdue = leads.filter(l=>l.followUp && l.followUp<todayStr && !l.converted);
-  const manualToday   = leads.filter(l=>l.followUp && l.followUp===todayStr && !l.converted);
+  const manualOverdue = leads.filter(l=>l.followUp && l.followUp<todayStr && !l.converted && !(l.tags||[]).includes('planilha'));
+  const manualToday   = leads.filter(l=>l.followUp && l.followUp===todayStr && !l.converted && !(l.tags||[]).includes('planilha'));
 
   return `
     <div style="margin-bottom:20px">
@@ -3051,8 +3069,10 @@ function renderEstagiario(){
   const el = document.getElementById('estagiario-content');
   if(!el) return;
   const todayStr = today();
-  const convertedLeads  = leads.filter(l=>l.converted);
-  const meetingLeads    = leads.filter(l=>l.followUp && l.followUp>=todayStr && !l.converted);
+  // Só leads operacionais (excl. planilha) na área do estagiário
+  const opLeads = leads.filter(l=>!(l.tags||[]).includes('planilha'));
+  const convertedLeads  = opLeads.filter(l=>l.converted);
+  const meetingLeads    = opLeads.filter(l=>l.followUp && l.followUp>=todayStr && !l.converted);
   const overdueTasks    = tasks.filter(t=>t.deadline && t.deadline<todayStr && t.status!=='concluida');
   const tasksByStatus   = s => tasks.filter(t=>t.status===s);
 
@@ -3185,9 +3205,11 @@ function renderThiago(){
   const monthlyHours  = weeklyHours*4;
   const loadStatus    = weeklyHours<=10?{l:'Saudável ✅',c:'#22c55e'}:weeklyHours<=20?{l:'Moderada ⚠️',c:'#d4af37'}:{l:'Alta 🔴',c:'var(--red)'};
   const mentorshipRevenue = active.reduce((s,m)=>s+(parseFloat(m.value)||0),0);
-  const convertedLeads = leads.filter(l=>l.converted);
-  const igLeads = leads.filter(l=>l.origin==='ig_comentario'||l.origin==='ig_seguidor');
-  const vetPct  = leads.length?Math.round(leads.filter(l=>l.isVet).length/leads.length*100):0;
+  // ── Visão Comercial: somente leads operacionais (excl. planilha)
+  const opLeads     = leads.filter(l=>!(l.tags||[]).includes('planilha'));
+  const convertedLeads = opLeads.filter(l=>l.converted);
+  const igLeads = opLeads.filter(l=>l.origin==='ig_comentario'||l.origin==='ig_seguidor');
+  const vetPct  = opLeads.length?Math.round(opLeads.filter(l=>l.isVet).length/opLeads.length*100):0;
 
   // ── Vendas por perfil (funis de planilha)
   // Detecta funis de gestores e autônomos pelo nome
@@ -3427,7 +3449,7 @@ function renderThiago(){
           <div class="card-hd"><span class="card-title">📊 Visão Comercial</span></div>
           <div style="padding:12px 16px;display:flex;flex-direction:column;gap:8px">
             ${[
-              ['Total de Leads',  leads.length,          'var(--text)',  'var(--surface2)'],
+              ['Total de Leads',  opLeads.length,         'var(--text)',  'var(--surface2)'],
               ['Convertidos',     convertedLeads.length, '#22c55e',      'rgba(34,197,94,.07)'],
               ['Via Instagram DM',igLeads.length,        '#e1306c',      'rgba(225,48,108,.07)'],
               ['% Veterinários',  vetPct+'%',            vetPct>=60?'#3b82f6':'var(--red)', vetPct>=60?'rgba(59,130,246,.07)':'rgba(239,68,68,.07)'],
