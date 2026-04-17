@@ -4353,7 +4353,7 @@ function renderAbordagemTable(){
               <span style="font-size:10px;color:var(--text3)">WhatsApp recomenda até 1.000 caracteres para primeira mensagem</span>
             </div>
             <!-- Botões de ação -->
-            <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+            <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center">
               <a id="walink-${l.id}" href="${wlink||'#'}" target="_blank"
                 class="btn btn-sm"
                 style="background:linear-gradient(135deg,#25d366,#128c7e);color:#fff;border-color:transparent;font-weight:700;text-decoration:none;${wlink?'':'opacity:.4;pointer-events:none'}">
@@ -4362,7 +4362,11 @@ function renderAbordagemTable(){
               </a>
               <button onclick="copyScript('${l.id}')" class="btn btn-sm">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                Copiar mensagem
+                Copiar
+              </button>
+              <button onclick="markAbordado('${l.id}')" class="btn btn-sm" style="margin-left:auto;background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.3);color:#22c55e;font-weight:700">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="13" height="13"><polyline points="20 6 9 17 4 12"/></svg>
+                ✅ Marcar como Abordado
               </button>
             </div>
           </div>
