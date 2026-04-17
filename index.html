@@ -1143,10 +1143,10 @@ textarea{resize:vertical;line-height:1.6}
       </div>
       <div class="field-row">
         <div class="field"><label>Horas por Sessão</label><input type="number" id="mm2-hps" placeholder="1.5" min="0.5" step="0.5"></div>
-        <div class="field"><label>Sessões por Semana</label><input type="number" id="mm2-spw" placeholder="2" min="1" max="7"></div>
+        <div class="field"><label>Sessões por Mês</label><input type="number" id="mm2-spw" placeholder="2" min="1" max="31"></div>
       </div>
       <div class="field-row">
-        <div class="field"><label>Total de Semanas</label><input type="number" id="mm2-weeks" placeholder="8" min="1"></div>
+        <div class="field"><label>Total de Meses</label><input type="number" id="mm2-weeks" placeholder="3" min="1"></div>
         <div class="field"><label>Valor Mensal (R$)</label><input type="number" id="mm2-value" placeholder="0" min="0"></div>
       </div>
       <div class="field-row">
@@ -3359,10 +3359,10 @@ function renderThiago(){
   if(!el) return;
   const active   = mentorships.filter(m=>m.active);
   const inactive = mentorships.filter(m=>!m.active);
-  const weeklyHours   = active.reduce((s,m)=>(parseFloat(m.hoursPerSession)||0)*(parseInt(m.sessionsPerWeek)||0)+s,0);
+  // sessionsPerWeek agora = sessões por MÊS
+  const monthlyHours  = active.reduce((s,m)=>(parseFloat(m.hoursPerSession)||0)*(parseInt(m.sessionsPerWeek)||0)+s,0);
   const contractHours = active.reduce((s,m)=>(parseFloat(m.hoursPerSession)||0)*(parseInt(m.sessionsPerWeek)||0)*(parseInt(m.totalWeeks)||0)+s,0);
-  const monthlyHours  = weeklyHours*4;
-  const loadStatus    = weeklyHours<=10?{l:'Saudável ✅',c:'#22c55e'}:weeklyHours<=20?{l:'Moderada ⚠️',c:'#d4af37'}:{l:'Alta 🔴',c:'var(--red)'};
+  const loadStatus    = monthlyHours<=10?{l:'Saudável ✅',c:'#22c55e'}:monthlyHours<=20?{l:'Moderada ⚠️',c:'#d4af37'}:{l:'Alta 🔴',c:'var(--red)'};
   const mentorshipRevenue = active.reduce((s,m)=>s+(parseFloat(m.value)||0),0);
   // ── Visão Comercial: somente leads operacionais (excl. planilha)
   const opLeads     = leads.filter(l=>!(l.tags||[]).includes('planilha'));
@@ -3517,18 +3517,18 @@ function renderThiago(){
     <!-- ══ KPIs DE MENTORIAS ══ -->
     <div class="stats-grid" style="margin-bottom:16px">
       ${miniKpi('Mentorias Ativas',  active.length,           '#d4af37','rgba(212,175,55,.1)')}
-      ${miniKpi('Horas/Semana',      weeklyHours.toFixed(1)+'h', weeklyHours>20?'#ef4444':weeklyHours>10?'#d4af37':'#22c55e', weeklyHours>20?'rgba(239,68,68,.1)':weeklyHours>10?'rgba(212,175,55,.1)':'rgba(34,197,94,.1)')}
+      ${miniKpi('Horas/Mês',         monthlyHours.toFixed(1)+'h', monthlyHours>20?'#ef4444':monthlyHours>10?'#d4af37':'#22c55e', monthlyHours>20?'rgba(239,68,68,.1)':monthlyHours>10?'rgba(212,175,55,.1)':'rgba(34,197,94,.1)')}
       ${miniKpi('Receita Atual/Mês', fmtMoney(mentorshipRevenue),'#22c55e','rgba(34,197,94,.1)')}
-      ${miniKpi('Horas/Mês (est.)',  monthlyHours.toFixed(1)+'h','#a855f7','rgba(168,85,247,.1)')}
+      ${miniKpi('Horas Totais (est.)', contractHours.toFixed(0)+'h','#a855f7','rgba(168,85,247,.1)')}
     </div>
 
     <!-- ALERTA CARGA -->
-    <div style="margin-bottom:16px;padding:14px 18px;border-radius:var(--r);background:${weeklyHours>20?'rgba(239,68,68,.07)':weeklyHours>10?'rgba(212,175,55,.07)':'rgba(34,197,94,.07)'};border:1px solid ${weeklyHours>20?'rgba(239,68,68,.2)':weeklyHours>10?'rgba(212,175,55,.2)':'rgba(34,197,94,.2)'};display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
+    <div style="margin-bottom:16px;padding:14px 18px;border-radius:var(--r);background:${monthlyHours>20?'rgba(239,68,68,.07)':monthlyHours>10?'rgba(212,175,55,.07)':'rgba(34,197,94,.07)'};border:1px solid ${monthlyHours>20?'rgba(239,68,68,.2)':monthlyHours>10?'rgba(212,175,55,.2)':'rgba(34,197,94,.2)'};display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
       <div>
         <div style="font-size:13px;font-weight:700;color:${loadStatus.c}">Carga Horária: ${loadStatus.l}</div>
-        <div style="font-size:11.5px;color:var(--text3);margin-top:3px">${weeklyHours.toFixed(1)}h semanais · ${monthlyHours.toFixed(1)}h mensais · ${contractHours.toFixed(0)}h total em contratos</div>
+        <div style="font-size:11.5px;color:var(--text3);margin-top:3px">${monthlyHours.toFixed(1)}h mensais · ${contractHours.toFixed(0)}h total em contratos</div>
       </div>
-      <div style="font-size:28px;font-weight:900;color:${loadStatus.c}">${weeklyHours.toFixed(1)}<span style="font-size:14px">h/sem</span></div>
+      <div style="font-size:28px;font-weight:900;color:${loadStatus.c}">${monthlyHours.toFixed(1)}<span style="font-size:14px">h/mês</span></div>
     </div>
 
     <!-- PROJEÇÃO 12 MESES -->
@@ -3668,8 +3668,8 @@ function buildProjection(allMentorships, months){
 }
 
 function mentorshipRow(m){
-  const weekHours  = (parseFloat(m.hoursPerSession)||0)*(parseInt(m.sessionsPerWeek)||0);
-  const totalHours = weekHours*(parseInt(m.totalWeeks)||0);
+  const monthHours = (parseFloat(m.hoursPerSession)||0)*(parseInt(m.sessionsPerWeek)||0);
+  const totalHours = monthHours*(parseInt(m.totalWeeks)||0);
   const typeIcon   = m.type.includes('Grupo')?'👥':m.type.includes('Consul')?'💼':m.type.includes('Inten')?'⚡':'👤';
   return `<div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;gap:12px">
     <div style="width:38px;height:38px;border-radius:10px;background:${m.active?'rgba(212,175,55,.12)':'rgba(128,128,128,.1)'};display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">${typeIcon}</div>
@@ -3679,8 +3679,8 @@ function mentorshipRow(m){
         <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;background:${m.active?'rgba(212,175,55,.1)':'var(--surface3)'};color:${m.active?'var(--gold)':'var(--text3)'}">${m.type}</span>
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:10px;font-size:11px;color:var(--text3)">
-        <span>⏱ ${m.hoursPerSession}h/sessão · ${m.sessionsPerWeek}x/sem · ${m.totalWeeks} sem</span>
-        <span>🕒 ${weekHours.toFixed(1)}h/sem · ${totalHours.toFixed(0)}h total</span>
+        <span>⏱ ${m.hoursPerSession}h/sessão · ${m.sessionsPerWeek}x/mês · ${m.totalWeeks} meses</span>
+        <span>🕒 ${monthHours.toFixed(1)}h/mês · ${totalHours.toFixed(0)}h total</span>
         ${m.startDate?`<span>📅 ${fmtDate(m.startDate)}</span>`:''}
         ${m.value?`<span style="color:var(--gold);font-weight:700">${fmtMoney(m.value)}/mês</span>`:''}
       </div>
@@ -3750,11 +3750,11 @@ function toggleScheduleOptions(){
 }
 
 function updateMentorshipEndDate(){
-  const start = document.getElementById('mm2-start').value;
-  const weeks = parseInt(document.getElementById('mm2-weeks').value)||0;
-  if(start && weeks){
+  const start  = document.getElementById('mm2-start').value;
+  const months = parseInt(document.getElementById('mm2-weeks').value)||0;
+  if(start && months){
     const d = new Date(start+'T00:00:00');
-    d.setDate(d.getDate() + weeks*7);
+    d.setMonth(d.getMonth() + months);
     document.getElementById('mm2-end').value = d.toISOString().slice(0,10);
   }
 }
@@ -3766,7 +3766,7 @@ function getSelectedWeekdays(){
 function generateSessions(m){
   if(!m.startDate || m.scheduleType==='nenhuma') return [];
   const start = new Date(m.startDate+'T00:00:00');
-  const end   = m.endDate ? new Date(m.endDate+'T00:00:00') : new Date(start.getTime()+m.totalWeeks*7*86400000);
+  const end   = m.endDate ? new Date(m.endDate+'T00:00:00') : (() => { const d=new Date(start); d.setMonth(d.getMonth()+(m.totalWeeks||3)); return d; })();
   const sessions = [];
   const maxSessions = 200;
   let cur = new Date(start);
