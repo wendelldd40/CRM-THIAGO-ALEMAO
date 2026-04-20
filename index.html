@@ -4029,16 +4029,7 @@ function buildWhatsAppLink(phone, text){
   return `https://wa.me/${num}?text=${msg}`;
 }
 
-function getScript(lead){
-  const perfil  = getPerfil(lead);
-  if(!perfil) return null;
-  const genero   = getGenero(lead.tags);
-  const recencia = getRecencia(lead.date);
-  const script   = SCRIPTS[perfil]?.[genero]?.[recencia];
-  if(!script) return null;
-  const firstName = (lead.name||'').split(' ')[0];
-  return script.replace('[NOME]', firstName);
-}
+
 
 /* ══════════════════════════════════════════
    ABORDAGEM — HELPERS & SCRIPTS
@@ -4185,6 +4176,63 @@ Gostaríamos de entender melhor o seu momento atual e apresentar algumas soluç�
 Teria alguns minutinhos para conversarmos esta semana?`;
 }
 
+/* ══════════════════════════════════════════
+   SCRIPT GLOBAL — estado persistente
+   Permite editar o template base e aplicar
+   em todos os leads com {nome}/{saudacao}/{contexto}
+══════════════════════════════════════════ */
+const SCRIPT_GLOBAL_DEFAULTS = {
+  gestor: `Olá, {saudacao}!
+
+Me chamo Wendell e faço parte da equipe do Thiago Alemão. {contexto} e isso nos mostra que a gestão financeira da sua clínica é uma prioridade para você.
+
+Gostaríamos de entender melhor como está sendo sua jornada à frente da clínica e apresentar algumas soluções que o Thiago tem desenvolvido especificamente para gestores que buscam crescimento com mais estratégia e menos sobrecarga.
+
+Teria alguns minutinhos para conversarmos esta semana?`,
+
+  autonomo: `Olá, {saudacao}!
+
+Me chamo Wendell e faço parte da equipe do Thiago Alemão. {contexto} e isso nos mostra que você já está buscando caminhos para valorizar mais o seu trabalho como veterinário(a) autônomo(a).
+
+Gostaríamos de te apresentar algo que pode complementar o que você já tem em mãos e te ajudar a estruturar ainda mais sua precificação e gestão financeira na prática.
+
+Teria alguns minutinhos para conversarmos esta semana?`,
+};
+
+// Estado global dos scripts customizados (memória da sessão)
+let globalScripts = {
+  gestor:   SCRIPT_GLOBAL_DEFAULTS.gestor,
+  autonomo: SCRIPT_GLOBAL_DEFAULTS.autonomo,
+};
+
+// Aplica variáveis do script global em um lead específico
+function applyGlobalScript(l){
+  const perfil  = getPerfil(l);
+  if(!perfil) return getScript(l); // fallback para script individual
+
+  const template = globalScripts[perfil] || SCRIPT_GLOBAL_DEFAULTS[perfil];
+  const firstName = (l.name||'Lead').split(' ')[0];
+  const genero    = getGenero(l.tags) !== 'neutro' ? getGenero(l.tags) : detectGeneroByName(l.name);
+  const recencia  = getRecencia(l.date);
+
+  const saudacao = genero === 'feminino' ? `Dra. ${firstName}`
+                 : genero === 'masculino' ? `Dr. ${firstName}`
+                 : firstName;
+
+  const contextoMap = {
+    quente: 'Notei que você adquiriu recentemente o kit de precificação do Thiago Alemão',
+    morno:  'Você adquiriu o kit de precificação do Thiago Alemão há alguns meses',
+    frio:   'Há algum tempo você adquiriu o kit de precificação do Thiago Alemão',
+  };
+  const contexto = contextoMap[recencia] || contextoMap.frio;
+
+  return template
+    .replace(/\{nome\}/gi, firstName)
+    .replace(/\{saudacao\}/gi, saudacao)
+    .replace(/\{contexto\}/gi, contexto)
+    .replace(/\{perfil\}/gi, perfil === 'gestor' ? 'Gestor Veterinário' : 'Veterinário Autônomo');
+}
+
 function renderAbordagem(){
   const el = document.getElementById('abordagem-content');
   if(!el) return;
@@ -4205,11 +4253,90 @@ function renderAbordagem(){
 
   el.innerHTML = `
     <!-- STATS RÁPIDOS -->
-    <div class="stats-grid" style="margin-bottom:20px">
+    <div class="stats-grid" style="margin-bottom:16px">
       ${miniKpi('Total com WhatsApp', planilhaLeads.length, '#25d366','rgba(37,211,102,.1)')}
       ${miniKpi('Gestores', gestores.length, '#2563eb','rgba(37,99,235,.1)')}
       ${miniKpi('Autônomos', autonomos.length, '#059669','rgba(5,150,105,.1)')}
       ${miniKpi('Sem perfil', semPerfil.length, '#8a8680','rgba(138,134,128,.1)')}
+    </div>
+
+    <!-- EDITOR DE SCRIPT GLOBAL -->
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-hd" style="cursor:pointer" onclick="toggleScriptGlobal()">
+        <div>
+          <span class="card-title">✏️ Script Global de Abordagem</span>
+          <div style="font-size:10px;color:var(--text3);margin-top:2px">Edite uma vez — aplica em todos os leads automaticamente</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:10px;background:rgba(45,157,143,.1);color:var(--gold);padding:2px 8px;border-radius:99px;font-weight:700">
+            Variáveis: {nome} · {saudacao} · {contexto}
+          </span>
+          <svg id="script-global-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="transition:.2s"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+      </div>
+      <div id="script-global-panel" style="display:none;border-top:1px solid var(--border);padding:16px 18px">
+
+        <!-- Legenda das variáveis -->
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+          ${[
+            ['{nome}',      'Primeiro nome do lead', '#3b82f6'],
+            ['{saudacao}',  'Dra./Dr. + Nome (conforme gênero)', '#a855f7'],
+            ['{contexto}',  'Referência ao kit (quente/morno/frio)', '#d4af37'],
+            ['{perfil}',    'Gestor Veterinário ou Veterinário Autônomo', '#059669'],
+          ].map(([v,d,c])=>`
+            <div style="background:${c}12;border:1px solid ${c}30;border-radius:var(--r-sm);padding:5px 10px;font-size:10px">
+              <span style="font-weight:800;color:${c};font-family:var(--mono)">${v}</span>
+              <span style="color:var(--text3);margin-left:6px">${d}</span>
+            </div>`).join('')}
+        </div>
+
+        <!-- Dois editores lado a lado -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+
+          <!-- Gestor -->
+          <div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+              <label style="font-size:11px;font-weight:700;color:#2563eb;display:flex;align-items:center;gap:5px">
+                <span>📊</span> Script — Gestores
+              </label>
+              <button onclick="resetScriptGlobal('gestor')" class="btn btn-sm btn-ghost" style="font-size:10px;padding:3px 8px">↺ Original</button>
+            </div>
+            <textarea id="global-script-gestor" rows="12"
+              oninput="onGlobalScriptChange('gestor')"
+              style="width:100%;background:var(--bg);border:1px solid rgba(37,99,235,.3);border-radius:var(--r-sm);padding:10px 12px;font-family:var(--font);font-size:12px;color:var(--text);outline:none;resize:vertical;line-height:1.7"
+              onfocus="this.style.borderColor='#2563eb'" onblur="this.style.borderColor='rgba(37,99,235,.3)'"
+            >${globalScripts.gestor}</textarea>
+            <div style="font-size:10px;color:var(--text3);margin-top:4px;font-family:var(--mono)" id="gs-count-gestor">${globalScripts.gestor.length} chars</div>
+          </div>
+
+          <!-- Autônomo -->
+          <div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+              <label style="font-size:11px;font-weight:700;color:#059669;display:flex;align-items:center;gap:5px">
+                <span>🩺</span> Script — Autônomos
+              </label>
+              <button onclick="resetScriptGlobal('autonomo')" class="btn btn-sm btn-ghost" style="font-size:10px;padding:3px 8px">↺ Original</button>
+            </div>
+            <textarea id="global-script-autonomo" rows="12"
+              oninput="onGlobalScriptChange('autonomo')"
+              style="width:100%;background:var(--bg);border:1px solid rgba(5,150,105,.3);border-radius:var(--r-sm);padding:10px 12px;font-family:var(--font);font-size:12px;color:var(--text);outline:none;resize:vertical;line-height:1.7"
+              onfocus="this.style.borderColor='#059669'" onblur="this.style.borderColor='rgba(5,150,105,.3)'"
+            >${globalScripts.autonomo}</textarea>
+            <div style="font-size:10px;color:var(--text3);margin-top:4px;font-family:var(--mono)" id="gs-count-autonomo">${globalScripts.autonomo.length} chars</div>
+          </div>
+        </div>
+
+        <!-- Botão aplicar -->
+        <div style="margin-top:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+          <div style="font-size:11px;color:var(--text3)">
+            💡 As edições atualizam automaticamente os links de WhatsApp de cada lead abaixo
+          </div>
+          <button onclick="aplicarScriptGlobal()" class="btn btn-sm btn-gold" style="font-weight:700">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><polyline points="20 6 9 17 4 12"/></svg>
+            Aplicar em todos os leads visíveis
+          </button>
+        </div>
+      </div>
     </div>
 
     <!-- FILTROS -->
@@ -4303,19 +4430,25 @@ function renderAbordagemTable(){
     <div style="font-size:11px;color:var(--text3);margin-bottom:8px;padding:0 2px">${filtered.length} lead${filtered.length!==1?'s':''} encontrado${filtered.length!==1?'s':''}</div>
     <div style="display:flex;flex-direction:column;gap:8px">
       ${filtered.map(l=>{
-        const script    = getScript(l);
+        const script    = applyGlobalScript(l) || getScript(l);
         const rec       = getRecencia(l.date);
         const gen       = getGenero(l.tags) !== 'neutro' ? getGenero(l.tags) : detectGeneroByName(l.name);
         const perf      = getPerfil(l);
         const wlink     = script ? buildWhatsAppLink(l.phone, script) : null;
-        const safeScript = (script||'').replace(/`/g,"'").replace(/\\/g,'\\\\');
+        const jaAbordado = (l.tags||[]).includes('abordado');
 
-        return `<div class="card" style="overflow:visible" id="card-${l.id}">
+        return `<div class="card" style="overflow:visible;${jaAbordado?'opacity:.6':''}" id="card-${l.id}" data-lead-id="${l.id}">
           <div style="padding:14px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
             <!-- Avatar + Info -->
-            <div style="width:40px;height:40px;border-radius:50%;background:${strColor(l.name)};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#fff;flex-shrink:0">${initials(l.name)}</div>
+            <div style="width:40px;height:40px;border-radius:50%;background:${strColor(l.name)};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#fff;flex-shrink:0;position:relative">
+              ${initials(l.name)}
+              ${jaAbordado?`<div style="position:absolute;bottom:-2px;right:-2px;width:14px;height:14px;background:#22c55e;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:8px">✓</div>`:''}
+            </div>
             <div style="flex:1;min-width:180px">
-              <div style="font-size:13px;font-weight:700">${l.name}</div>
+              <div style="font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px">
+                ${l.name}
+                ${jaAbordado?`<span style="font-size:9px;font-weight:700;padding:1px 6px;border-radius:99px;background:rgba(34,197,94,.1);color:#22c55e">✅ Abordado</span>`:''}
+              </div>
               <div style="font-size:11px;color:var(--text3);margin-top:2px;font-family:var(--mono)">${l.phone||'—'}</div>
             </div>
             <!-- Tags -->
@@ -4376,12 +4509,62 @@ function renderAbordagemTable(){
   `;
 }
 
+function toggleScriptGlobal(){
+  const panel = document.getElementById('script-global-panel');
+  const arrow = document.getElementById('script-global-arrow');
+  if(!panel) return;
+  const open = panel.style.display === 'none';
+  panel.style.display = open ? '' : 'none';
+  if(arrow) arrow.style.transform = open ? 'rotate(180deg)' : '';
+}
+
+function onGlobalScriptChange(perfil){
+  const ta = document.getElementById('global-script-'+perfil);
+  const cc = document.getElementById('gs-count-'+perfil);
+  if(!ta) return;
+  globalScripts[perfil] = ta.value;
+  if(cc) cc.textContent = ta.value.length + ' chars';
+  // Update all visible textarea links for this perfil in real time
+  document.querySelectorAll('[data-lead-id]').forEach(card => {
+    const id = card.dataset.leadId;
+    const l  = getLead(id);
+    if(!l || getPerfil(l) !== perfil) return;
+    const ta2  = document.getElementById('textarea-'+id);
+    const link = document.getElementById('walink-'+id);
+    if(!ta2 || !link) return;
+    const newText = applyGlobalScript(l);
+    ta2.value = newText;
+    const num = (l.phone||'').replace(/\D/g,'');
+    if(num.length >= 11) link.href = `https://wa.me/${num}?text=${encodeURIComponent(newText)}`;
+  });
+}
+
+function resetScriptGlobal(perfil){
+  globalScripts[perfil] = SCRIPT_GLOBAL_DEFAULTS[perfil];
+  const ta = document.getElementById('global-script-'+perfil);
+  const cc = document.getElementById('gs-count-'+perfil);
+  if(ta){ ta.value = globalScripts[perfil]; }
+  if(cc){ cc.textContent = globalScripts[perfil].length + ' chars'; }
+  onGlobalScriptChange(perfil);
+  toast(`↺ Script de ${perfil === 'gestor' ? 'Gestores' : 'Autônomos'} restaurado!`);
+}
+
+function aplicarScriptGlobal(){
+  // Reads current values from textareas (in case user typed but didn't trigger oninput)
+  ['gestor','autonomo'].forEach(p => {
+    const ta = document.getElementById('global-script-'+p);
+    if(ta) globalScripts[p] = ta.value;
+  });
+  // Re-render table so all textareas get the new script
+  renderAbordagemTable();
+  toast('✅ Script global aplicado em todos os leads!');
+}
+
 function toggleScript(id){
   const el = document.getElementById('script-'+id);
   if(!el) return;
   const isHidden = el.style.display === 'none';
   el.style.display = isHidden ? '' : 'none';
-  // Init char count on first open
   if(isHidden){
     const ta = document.getElementById('textarea-'+id);
     const cc = document.getElementById('charcount-'+id);
